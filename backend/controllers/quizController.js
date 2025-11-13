@@ -6,7 +6,150 @@ const QuizAttempt = require('../models/QuizAttempt');
 const fs = require('fs').promises;
 const path = require('path');
 
-// AI Service - Using Google Gemini (FREE!)
+const extractTextFromPDF = async (filePath) => {
+  console.log('→ Starting PDF extraction for:', filePath);
+  
+  try {
+    const pdf = require('pdf-parse');
+    const dataBuffer = await fs.readFile(filePath);
+    
+    console.log('→ PDF buffer read, size:', dataBuffer.length);
+    
+    const options = {
+      max: 0,
+    };
+    
+    const data = await pdf(dataBuffer, options);
+    
+    console.log('✓ PDF parsed successfully');
+    console.log('→ Pages:', data.numpages);
+    console.log('→ Text length:', data.text.length);
+    
+    if (!data.text || data.text.trim().length === 0) {
+      console.warn('⚠️ PDF parsed but no text found - might be image-based or scanned');
+      throw new Error('PDF contains no extractable text. This might be a scanned document or image-based PDF.');
+    }
+    
+    console.log('→ First 500 chars:', data.text.substring(0, 500));
+    
+    return data.text;
+    
+  } catch (error) {
+    console.error('❌ PDF extraction failed:', error.message);
+    
+    if (error.message.includes('Invalid PDF')) {
+      throw new Error('Invalid or corrupted PDF file');
+    } else if (error.message.includes('encrypted')) {
+      throw new Error('PDF is password-protected and cannot be read');
+    } else if (error.message.includes('no extractable text')) {
+      throw error; 
+    } else {
+      throw new Error(`Failed to extract text from PDF: ${error.message}`);
+    }
+  }
+};
+
+// Alternative PDF extraction using pdf2json (fallback)
+const extractTextFromPDFAlternative = async (filePath) => {
+  const PDFParser = require('pdf2json');
+  
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
+    
+    pdfParser.on('pdfParser_dataError', (errData) => {
+      console.error('❌ PDF2JSON Error:', errData.parserError);
+      reject(new Error(`Failed to parse PDF: ${errData.parserError}`));
+    });
+    
+    pdfParser.on('pdfParser_dataReady', (pdfData) => {
+      try {
+        const text = pdfData.Pages.map(page => {
+          return page.Texts.map(textItem => {
+            return textItem.R.map(r => decodeURIComponent(r.T)).join(' ');
+          }).join(' ');
+        }).join('\n\n');
+        
+        if (!text || text.trim().length === 0) {
+          reject(new Error('PDF contains no extractable text'));
+        } else {
+          console.log('✓ PDF2JSON extraction successful, length:', text.length);
+          resolve(text);
+        }
+      } catch (error) {
+        reject(new Error(`Failed to process PDF data: ${error.message}`));
+      }
+    });
+    
+    pdfParser.loadPDF(filePath);
+  });
+};
+
+// OCR extraction for scanned/image-based PDFs using pure JavaScript
+const extractTextFromPDFWithOCR = async (filePath) => {
+  console.log('→ Starting OCR extraction...');
+  
+  try {
+    const { createWorker } = require('tesseract.js');
+    const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+    const { createCanvas } = require('canvas');
+    
+    const dataBuffer = await fs.readFile(filePath);
+    const uint8Array = new Uint8Array(dataBuffer);
+    
+    console.log('→ Loading PDF document...');
+    
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Array,
+      useSystemFonts: true,
+    });
+    
+    const pdfDocument = await loadingTask.promise;
+    const numPages = pdfDocument.numPages;
+    
+    console.log(`→ Found ${numPages} pages to OCR`);
+    
+    const worker = await createWorker('eng');
+    
+    let allText = '';
+    
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      console.log(`→ OCR processing page ${pageNum}/${numPages}...`);
+      
+      const page = await pdfDocument.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 }); 
+      
+      const canvas = createCanvas(viewport.width, viewport.height);
+      const context = canvas.getContext('2d');
+      
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+      
+      const imageBuffer = canvas.toBuffer('image/png');
+      
+      const { data: { text } } = await worker.recognize(imageBuffer);
+      allText += text + '\n\n';
+      
+      page.cleanup();
+    }
+    
+    await worker.terminate();
+    
+    console.log('✓ OCR extraction successful, length:', allText.length);
+    
+    if (!allText || allText.trim().length < 50) {
+      throw new Error('OCR extracted very little text - PDF might be blank or unreadable');
+    }
+    
+    return allText;
+    
+  } catch (error) {
+    console.error('❌ OCR extraction failed:', error.message);
+    throw new Error(`OCR extraction failed: ${error.message}`);
+  }
+};
+
 const generateQuizWithAI = async (extractedTexts, settings) => {
   const combinedText = extractedTexts.join('\n\n---\n\n');
   
@@ -14,13 +157,11 @@ const generateQuizWithAI = async (extractedTexts, settings) => {
   console.log('Combined text length:', combinedText.length);
   console.log('Settings:', settings);
   
-  // Check for API key
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is not set in environment variables');
   }
   
-  // Truncate text if too long (Gemini has token limits)
-  const maxLength = 30000; // ~30k characters
+  const maxLength = 30000;
   const truncatedText = combinedText.length > maxLength 
     ? combinedText.substring(0, maxLength) + '\n\n[Text truncated due to length...]'
     : combinedText;
@@ -67,11 +208,11 @@ Example:
             }
           ],
           generationConfig: {
-            temperature: 0.3, // Lower temperature for more consistent JSON
-            maxOutputTokens: 65536, // 2.5 Flash supports up to 65k output
+            temperature: 0.3,
+            maxOutputTokens: 65536,
             topP: 0.8,
             topK: 40,
-            responseMimeType: "application/json", // Force JSON output
+            responseMimeType: "application/json",
           }
         }),
       }
@@ -89,7 +230,6 @@ Example:
     console.log('✓ API Response received');
     console.log('Full API response:', JSON.stringify(data, null, 2));
     
-    // Extract text from Gemini response
     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
       console.error('❌ Unexpected API response structure:', data);
       throw new Error('Invalid response structure from Gemini API');
@@ -101,20 +241,15 @@ Example:
 
     let questions;
     
-    // With responseMimeType: "application/json", the response should already be valid JSON
     try {
       questions = JSON.parse(textContent);
       console.log('✓ Direct JSON parse successful');
     } catch (parseError) {
       console.log('Direct parse failed, attempting cleanup...');
       
-      // Aggressive JSON cleaning as fallback
       textContent = textContent.trim();
-      
-      // Remove markdown code blocks if present
       textContent = textContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
       
-      // Remove any text before the first [ and after the last ]
       const firstBracket = textContent.indexOf('[');
       const lastBracket = textContent.lastIndexOf(']');
       
@@ -125,8 +260,6 @@ Example:
       }
       
       textContent = textContent.substring(firstBracket, lastBracket + 1);
-      
-      // Fix common JSON issues
       textContent = textContent.replace(/[""]/g, '"').replace(/['']/g, "'");
       textContent = textContent.replace(/,(\s*[}\]])/g, '$1');
       
@@ -142,7 +275,6 @@ Example:
       }
     }
 
-    // Validate questions
     console.log('Parsed data type:', typeof questions, Array.isArray(questions));
     console.log('Parsed data:', JSON.stringify(questions, null, 2));
     
@@ -159,7 +291,6 @@ Example:
 
     console.log('Raw questions count:', questions.length);
 
-    // Validate each question has required fields
     const validQuestions = questions.filter(q => {
       const hasQuestionText = q && q.question_text && typeof q.question_text === 'string';
       const hasQuestionType = q && q.question_type;
@@ -181,7 +312,6 @@ Example:
       throw new Error('No valid questions found in AI response');
     }
 
-    // Ensure we have the requested number of questions (or close to it)
     const requestedNum = parseInt(settings.numQuestions);
     if (validQuestions.length < requestedNum * 0.5) {
       console.error(`❌ Only ${validQuestions.length} valid questions out of ${requestedNum} requested`);
@@ -191,7 +321,7 @@ Example:
     console.log('✓ Parsed', validQuestions.length, 'valid questions');
     console.log('==================== AI GENERATION END ====================\n');
 
-    return validQuestions.slice(0, requestedNum); // Return only the requested number
+    return validQuestions.slice(0, requestedNum);
   } catch (error) {
     console.error('❌❌❌ AI GENERATION ERROR ❌❌❌');
     console.error('Error message:', error.message);
@@ -235,19 +365,28 @@ exports.uploadFiles = async (req, res) => {
         } else if (file.mimetype === 'application/pdf') {
           console.log('→ Extracting text from PDF...');
           try {
-            const pdf = require('pdf-parse');
-            const dataBuffer = await fs.readFile(file.path);
-            console.log('→ PDF buffer read, size:', dataBuffer.length);
-            
-            const data = await pdf(dataBuffer);
-            extractedText = data.text;
-            
-            console.log('✓ PDF extraction successful, length:', extractedText.length);
-            console.log('First 200 chars:', extractedText.substring(0, 200));
+            extractedText = await extractTextFromPDF(file.path);
+            console.log('✓ PDF extraction successful (pdf-parse)');
           } catch (pdfError) {
-            console.error('❌ PDF parsing failed:', pdfError.message);
-            console.error('PDF Error stack:', pdfError.stack);
-            processingError = pdfError.message;
+            console.error('❌ pdf-parse failed:', pdfError.message);
+            console.log('→ Trying alternative method (pdf2json)...');
+            
+            try {
+              extractedText = await extractTextFromPDFAlternative(file.path);
+              console.log('✓ PDF extraction successful (pdf2json)');
+            } catch (altError) {
+              console.error('❌ pdf2json also failed:', altError.message);
+              console.log('→ Trying OCR extraction (last resort)...');
+              
+              try {
+                extractedText = await extractTextFromPDFWithOCR(file.path);
+                console.log('✓ PDF extraction successful (OCR)');
+              } catch (ocrError) {
+                console.error('❌ OCR also failed:', ocrError.message);
+                processingError = `All PDF extraction methods failed. Original error: ${pdfError.message}`;
+                extractedText = null;
+              }
+            }
           }
         } else if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
           console.log('→ Extracting text from DOCX...');
@@ -276,6 +415,8 @@ exports.uploadFiles = async (req, res) => {
       }
 
       console.log('→ Saving to database...');
+      console.log('→ Extracted text length:', extractedText ? extractedText.length : 0);
+      console.log('→ Processing error:', processingError);
       
       try {
         const fileData = {
@@ -291,7 +432,12 @@ exports.uploadFiles = async (req, res) => {
           processing_error: processingError,
         };
         
-        console.log('File data to save:', JSON.stringify(fileData, null, 2));
+        console.log('File data to save (text preview):', {
+          ...fileData,
+          extracted_text: fileData.extracted_text ? 
+            `${fileData.extracted_text.substring(0, 200)}... [${fileData.extracted_text.length} chars total]` : 
+            null
+        });
         
         const uploadedFile = await UploadedFile.create(fileData);
         console.log('✓ Database save successful, ID:', uploadedFile._id);
@@ -339,7 +485,6 @@ exports.generateQuiz = async (req, res) => {
       return res.status(400).json({ error: 'No files selected' });
     }
 
-    // Fetch uploaded files
     const files = await UploadedFile.find({
       _id: { $in: fileIds },
       user_id: userId,
@@ -352,7 +497,6 @@ exports.generateQuiz = async (req, res) => {
       return res.status(404).json({ error: 'No valid files found' });
     }
 
-    // Check if files have extracted text
     const extractedTexts = files.map((f) => f.extracted_text).filter(Boolean);
     
     if (extractedTexts.length === 0) {
@@ -364,7 +508,6 @@ exports.generateQuiz = async (req, res) => {
 
     console.log('Total extracted text length:', extractedTexts.join('').length);
 
-    // Create quiz record
     const quiz = await Quiz.create({
       user_id: userId,
       title: `Quiz - ${new Date().toLocaleDateString()}`,
@@ -387,7 +530,6 @@ exports.generateQuiz = async (req, res) => {
       difficulty: difficulty,
     };
 
-    // Generate quiz in background
     generateQuizWithAI(extractedTexts, settings)
       .then(async (questions) => {
         console.log('→ Updating quiz with generated questions...');
@@ -419,7 +561,6 @@ exports.generateQuiz = async (req, res) => {
   }
 };
 
-// Rest of the exports remain the same...
 exports.getQuizStatus = async (req, res) => {
   try {
     const userId = req.user.id;

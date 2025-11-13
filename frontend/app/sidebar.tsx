@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, NotepadText, Settings, ChevronLeft, ChevronRight, Sparkles, LogOut } from 'lucide-react';
+import { Home, MessageSquare, ClipboardList, History, Settings, ChevronLeft, ChevronRight, Sparkles, LogOut, Menu, X } from 'lucide-react';
 import { authService } from '@/services/auth.service';
 
 interface SidebarProps {
@@ -12,8 +12,22 @@ interface SidebarProps {
 
 export default function CollapsibleSidebar({ children }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth < 768) {
+        setIsCollapsed(true);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const menuItems = [
     {
@@ -22,25 +36,20 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
       href: '/dashboard',
     },
     {
-      icon: NotepadText,
+      icon: MessageSquare,
       label: 'AI Chat',
       href: '/chat',
     },
     {
-      icon: NotepadText,
+      icon: ClipboardList,
       label: 'Generate Quiz',
       href: '/quiz',
     },
     {
-      icon: NotepadText,
+      icon: History,
       label: 'Quiz History',
       href: '/history',
     },
-    // {
-    //   icon: Settings,
-    //   label: 'Settings',
-    //   href: '/settings',
-    // },
   ];
 
   const handleLogout = async () => {
@@ -52,6 +61,16 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
     }
   };
 
+  const toggleSidebar = () => {
+    setIsCollapsed(!isCollapsed);
+  };
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setIsCollapsed(true);
+    }
+  };
+
   return (
     <div className="sidebar-layout">
       <style jsx global>{`
@@ -59,6 +78,38 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
           display: flex;
           min-height: 100vh;
           background-color: #1a1a1a;
+          position: relative;
+        }
+
+        .mobile-menu-button {
+          position: fixed;
+          top: 1rem;
+          left: 1rem;
+          z-index: 1001;
+          background-color: rgba(31, 31, 31, 0.8);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(42, 42, 42, 0.6);
+          color: #d1d5db;
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          cursor: pointer;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          transition: all 200ms ease;
+        }
+
+        .mobile-menu-button:hover {
+          background-color: rgba(42, 42, 42, 0.9);
+          color: white;
+        }
+
+        .sidebar-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          z-index: 998;
         }
 
         .sidebar {
@@ -265,41 +316,90 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
 
         .main-content {
           flex: 1;
-          transition: margin-left 300ms cubic-bezier(0.4, 0, 0.2, 1);
           min-width: 0;
         }
 
         @media (max-width: 768px) {
-          .sidebar.expanded {
+          .mobile-menu-button {
+            display: flex;
+          }
+
+          .sidebar-overlay {
+            display: block;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 300ms ease;
+          }
+
+          .sidebar-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+          }
+
+          .sidebar {
             position: fixed;
             left: 0;
             top: 0;
             bottom: 0;
-            z-index: 1000;
+            z-index: 999;
+            transform: translateX(-100%);
+            transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+          }
+
+          .sidebar.expanded {
+            width: 280px;
+            transform: translateX(0);
           }
 
           .sidebar.collapsed {
-            width: 0;
-            border: none;
+            width: 280px;
+            transform: translateX(-100%);
+          }
+
+          .main-content {
+            width: 100%;
+          }
+
+          .collapse-toggle {
+            display: none;
           }
         }
       `}</style>
 
+      {/* Mobile menu button */}
+      {isMobile && (
+        <button 
+          className="mobile-menu-button"
+          onClick={toggleSidebar}
+          aria-label="Toggle menu"
+        >
+          {!isCollapsed ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      )}
+
+      {/* Mobile overlay */}
+      <div 
+        className={`sidebar-overlay ${!isCollapsed && isMobile ? 'active' : ''}`}
+        onClick={() => isMobile && setIsCollapsed(true)}
+      />
+
       <aside className={`sidebar ${isCollapsed ? 'collapsed' : 'expanded'}`}>
         <div className="sidebar-header">
-          <Link href="/dashboard" className="sidebar-logo">
+          <Link href="/dashboard" className="sidebar-logo" onClick={handleLinkClick}>
             <div className="logo-icon">
               <Sparkles size={18} />
             </div>
             <span className="logo-text">Memora AI</span>
           </Link>
-          <button
-            className="collapse-toggle"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
-          </button>
+          {!isMobile && (
+            <button
+              className="collapse-toggle"
+              onClick={toggleSidebar}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+            </button>
+          )}
         </div>
 
         <nav className="sidebar-nav">
@@ -312,6 +412,7 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
                   <Link
                     href={item.href}
                     className={`nav-link ${isActive ? 'active' : ''}`}
+                    onClick={handleLinkClick}
                   >
                     <Icon className="nav-icon" size={20} />
                     <span className="nav-label">{item.label}</span>

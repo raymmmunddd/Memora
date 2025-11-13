@@ -13,11 +13,11 @@ import {
   User,
   CheckCircle,
   Book,
-  Star,
   ChevronRight,
   BookOpen,
-  Clipboard,
-  ArrowUp
+  Upload,
+  Target,
+  Trophy
 } from 'lucide-react';
 import Link from 'next/link';
 import './dashboard.css';
@@ -27,9 +27,32 @@ interface UserData {
   email: string;
 }
 
+interface DashboardStats {
+  totalQuizzes: number;
+  completedQuizzes: number;
+  averageScore: number;
+  accuracy: number;
+  recentQuizScore: {
+    score: number;
+    title: string;
+    completedAt: string;
+    percentageChange: number;
+  } | null;
+  recentActivities: Array<{
+    type: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    icon: string;
+  }>;
+}
+
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [greeting, setGreeting] = useState('Welcome back');
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     // Subscribe to user changes
@@ -47,8 +70,54 @@ export default function DashboardPage() {
     else if (hour < 18) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchDashboardStats();
+    }
+  }, [user]);
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      const token = authService.getToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+
+      const response = await fetch('/api/dashboard/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard statistics');
+      }
+
+      const data = await response.json();
+      setStats(data);
+      setError('');
+    } catch (err) {
+      console.error('Error fetching dashboard stats:', err);
+      setError('Failed to load dashboard statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getActivityIcon = (iconName: string) => {
+    const icons: { [key: string]: any } = {
+      CheckCircle,
+      MessageSquare,
+      Book,
+      Upload,
+      Award
+    };
+    return icons[iconName] || Book;
+  };
 
   return (
     <CollapsibleSidebar>
@@ -67,221 +136,186 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="error-banner">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Loading your dashboard...</p>
+          </div>
+        )}
+
         {/* Stats Cards */}
-        <div className="stats-grid">
-          {/* Recent Quiz Score */}
-          <div className="stat-card">
-            <div className="stat-card-header">
-              <h3 className="stat-card-title">Recent Quiz Score</h3>
-              <div className="stat-icon stat-icon-primary">
-                <Award size={20} />
-              </div>
-            </div>
-            <div className="stat-card-value">
-              <div className="stat-main">
-                <span className="stat-number">87%</span>
-                <span className="stat-change stat-change-positive">
-                  <ArrowUp size={16} />
-                  12%
-                </span>
-              </div>
-            </div>
-            <p className="stat-description">Biology: Cellular Structures</p>
-          </div>
-
-          {/* Study Time */}
-          <div className="stat-card">
-            <div className="stat-card-header">
-              <h3 className="stat-card-title">Study Time</h3>
-              <div className="stat-icon stat-icon-secondary">
-                <Clock size={20} />
-              </div>
-            </div>
-            <div className="stat-card-value">
-              <div className="stat-main">
-                <span className="stat-number">8.5</span>
-                <span className="stat-unit">hours this week</span>
-              </div>
-            </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: '70%' }}></div>
-            </div>
-          </div>
-
-          {/* Progress Level */}
-          <div className="stat-card">
-            <div className="stat-card-header">
-              <h3 className="stat-card-title">Progress Level</h3>
-              <div className="stat-icon stat-icon-accent">
-                <TrendingUp size={20} />
-              </div>
-            </div>
-            <div className="stat-card-value">
-              <div className="stat-main">
-                <span className="stat-text">Advanced</span>
-                <span className="stat-badge">
-                  <Star size={16} />
-                  85% complete
-                </span>
-              </div>
-            </div>
-            <p className="stat-description">Current focus: Organic Chemistry</p>
-          </div>
-        </div>
-
-        {/* Quick Actions & Recent Activity */}
-        <div className="content-grid">
-          {/* Quick Actions */}
-          <div className="content-card">
-            <h3 className="content-card-title">Quick Actions</h3>
-            <div className="action-grid">
-              <Link href="/quiz" className="action-card">
-                <div className="action-icon action-icon-gradient-1">
-                  <HelpCircle size={20} />
+        {!loading && stats && (
+          <>
+            <div className="stats-grid">
+              {/* Total Quizzes */}
+              <div className="stat-card">
+                <div className="stat-card-header">
+                  <h3 className="stat-card-title">Total Quizzes</h3>
+                  <div className="stat-icon stat-icon-primary">
+                    <BookOpen size={20} />
+                  </div>
                 </div>
-                <p className="action-label">Start Quiz</p>
-              </Link>
-
-              <Link href="/chat" className="action-card">
-                <div className="action-icon action-icon-gradient-2">
-                  <MessageSquare size={20} />
+                <div className="stat-card-value">
+                  <div className="stat-main">
+                    <span className="stat-number">{stats.totalQuizzes}</span>
+                  </div>
                 </div>
-                <p className="action-label">Ask AI Tutor</p>
-              </Link>
-
-              <Link href="/history" className="action-card">
-                <div className="action-icon action-icon-gradient-3">
-                  <BarChart2 size={20} />
-                </div>
-                <p className="action-label">View Progress</p>
-              </Link>
-
-              <Link href="/profile" className="action-card">
-                <div className="action-icon action-icon-gradient-4">
-                  <User size={20} />
-                </div>
-                <p className="action-label">Profile Settings</p>
-              </Link>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="content-card">
-            <h3 className="content-card-title">Recent Activity</h3>
-            <div className="activity-list">
-              <div className="activity-item">
-                <div className="activity-icon activity-icon-primary">
-                  <CheckCircle size={20} />
-                </div>
-                <div className="activity-content">
-                  <p className="activity-title">Completed Quiz: Biology</p>
-                  <p className="activity-meta">Score: 87% | 30 minutes ago</p>
-                </div>
+                <p className="stat-description">Quizzes created</p>
               </div>
 
-              <div className="activity-item">
-                <div className="activity-icon activity-icon-secondary">
-                  <MessageSquare size={20} />
+              {/* Completed Quizzes */}
+              <div className="stat-card">
+                <div className="stat-card-header">
+                  <h3 className="stat-card-title">Completed</h3>
+                  <div className="stat-icon stat-icon-secondary">
+                    <Trophy size={20} />
+                  </div>
                 </div>
-                <div className="activity-content">
-                  <p className="activity-title">Asked AI about Photosynthesis</p>
-                  <p className="activity-meta">1 hour ago</p>
+                <div className="stat-card-value">
+                  <div className="stat-main">
+                    <span className="stat-number">{stats.completedQuizzes}</span>
+                  </div>
                 </div>
+                <p className="stat-description">Quizzes finished</p>
               </div>
 
-              <div className="activity-item">
-                <div className="activity-icon activity-icon-accent">
-                  <Book size={20} />
+              {/* Average Score */}
+              <div className="stat-card">
+                <div className="stat-card-header">
+                  <h3 className="stat-card-title">Average Score</h3>
+                  <div className="stat-icon stat-icon-accent">
+                    <Target size={20} />
+                  </div>
                 </div>
-                <div className="activity-content">
-                  <p className="activity-title">Studied Organic Chemistry</p>
-                  <p className="activity-meta">2 hours ago | 45 minutes</p>
+                <div className="stat-card-value">
+                  <div className="stat-main">
+                    <span className="stat-number">{stats.averageScore}%</span>
+                  </div>
                 </div>
+                <p className="stat-description">Overall performance</p>
               </div>
 
-              <div className="activity-item">
-                <div className="activity-icon activity-icon-purple">
-                  <Award size={20} />
+              {/* Accuracy */}
+              <div className="stat-card">
+                <div className="stat-card-header">
+                  <h3 className="stat-card-title">Accuracy</h3>
+                  <div className="stat-icon stat-icon-purple">
+                    <TrendingUp size={20} />
+                  </div>
                 </div>
-                <div className="activity-content">
-                  <p className="activity-title">Achievement Unlocked: Quick Learner</p>
-                  <p className="activity-meta">Yesterday</p>
+                <div className="stat-card-value">
+                  <div className="stat-main">
+                    <span className="stat-number">{stats.accuracy}%</span>
+                  </div>
                 </div>
+                <p className="stat-description">Correct answers rate</p>
               </div>
             </div>
 
-            <Link href="/progress" className="view-all-link">
-              View all activity
-              <ChevronRight size={16} />
-            </Link>
-          </div>
-        </div>
-
-        {/* Recommended Topics */}
-        {/* <div className="content-card recommended-topics">
-          <div className="content-card-header">
-            <h3 className="content-card-title">Recommended Topics</h3>
-            <Link href="/quiz-generator" className="view-all-link">
-              Start new quiz
-              <ChevronRight size={16} />
-            </Link>
-          </div>
-
-          <div className="topics-grid">
-            <Link href="/quiz?topic=biochemistry" className="topic-card">
-              <p className="topic-title">Biochemistry Basics</p>
-              <p className="topic-meta">8 questions</p>
-            </Link>
-
-            <Link href="/quiz?topic=organic-chem" className="topic-card">
-              <p className="topic-title">Organic Chemistry</p>
-              <p className="topic-meta">12 questions</p>
-            </Link>
-
-            <Link href="/quiz?topic=cell-biology" className="topic-card">
-              <p className="topic-title">Cell Biology</p>
-              <p className="topic-meta">10 questions</p>
-            </Link>
-
-            <Link href="/quiz?topic=genetics" className="topic-card">
-              <p className="topic-title">Genetics Review</p>
-              <p className="topic-meta">15 questions</p>
-            </Link>
-          </div>
-        </div> */}
-
-        {/* Upcoming Study Plan
-        <div className="content-card study-plan">
-          <h3 className="content-card-title">Upcoming Study Plan</h3>
-
-          <div className="study-plan-list">
-            <div className="study-plan-item study-plan-item-blue">
-              <div className="study-plan-content">
-                <div className="study-plan-icon">
-                  <BookOpen size={20} />
+            {/* Recent Quiz Score Banner */}
+            {stats.recentQuizScore && (
+              <div className="recent-quiz-banner">
+                <div className="banner-content">
+                  <Award className="banner-icon" size={32} />
+                  <div className="banner-text">
+                    <h3>Latest Quiz Result</h3>
+                    <p>{stats.recentQuizScore.title}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="study-plan-title">Chemistry: Reaction Mechanisms</p>
-                  <p className="study-plan-meta">Scheduled for tomorrow</p>
+                <div className="banner-score">
+                  <span className="score-value">{stats.recentQuizScore.score}%</span>
+                  {stats.recentQuizScore.percentageChange !== 0 && (
+                    <span className={`score-change ${stats.recentQuizScore.percentageChange > 0 ? 'positive' : 'negative'}`}>
+                      {stats.recentQuizScore.percentageChange > 0 ? '+' : ''}{stats.recentQuizScore.percentageChange}%
+                    </span>
+                  )}
                 </div>
               </div>
-              <button className="study-plan-button">Start Now</button>
-            </div>
+            )}
 
-            <div className="study-plan-item study-plan-item-purple">
-              <div className="study-plan-content">
-                <div className="study-plan-icon">
-                  <Clipboard size={20} />
-                </div>
-                <div>
-                  <p className="study-plan-title">Biology: Genetics Quiz</p>
-                  <p className="study-plan-meta">Due in 2 days</p>
+            {/* Quick Actions & Recent Activity */}
+            <div className="content-grid">
+              {/* Quick Actions */}
+              <div className="content-card">
+                <h3 className="content-card-title">Quick Actions</h3>
+                <div className="action-grid">
+                  <Link href="/quiz" className="action-card">
+                    <div className="action-icon action-icon-gradient-1">
+                      <HelpCircle size={20} />
+                    </div>
+                    <p className="action-label">Start Quiz</p>
+                  </Link>
+
+                  <Link href="/chat" className="action-card">
+                    <div className="action-icon action-icon-gradient-2">
+                      <MessageSquare size={20} />
+                    </div>
+                    <p className="action-label">Ask AI Tutor</p>
+                  </Link>
+
+                  <Link href="/history" className="action-card">
+                    <div className="action-icon action-icon-gradient-3">
+                      <BarChart2 size={20} />
+                    </div>
+                    <p className="action-label">View Progress</p>
+                  </Link>
+
+                  <Link href="/profile" className="action-card">
+                    <div className="action-icon action-icon-gradient-4">
+                      <User size={20} />
+                    </div>
+                    <p className="action-label">Profile Settings</p>
+                  </Link>
                 </div>
               </div>
-              <button className="study-plan-button">Prepare</button>
+
+              {/* Recent Activity */}
+              <div className="content-card">
+                <h3 className="content-card-title">Recent Activity</h3>
+                {stats.recentActivities.length > 0 ? (
+                  <>
+                    <div className="activity-list">
+                      {stats.recentActivities.slice(0, 5).map((activity, index) => {
+                        const IconComponent = getActivityIcon(activity.icon);
+                        return (
+                          <div key={index} className="activity-item">
+                            <div className={`activity-icon activity-icon-${['primary', 'secondary', 'accent', 'purple'][index % 4]}`}>
+                              <IconComponent size={20} />
+                            </div>
+                            <div className="activity-content">
+                              <p className="activity-title">{activity.title}</p>
+                              <p className="activity-meta">{activity.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {stats.recentActivities.length > 5 && (
+                      <Link href="/history" className="view-all-link">
+                        View all activity
+                        <ChevronRight size={16} />
+                      </Link>
+                    )}
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <Clock size={48} className="empty-icon" />
+                    <p className="empty-text">No recent activity</p>
+                    <p className="empty-subtext">Start a quiz or chat with AI to see your activity here</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div> */}
+          </>
+        )}
       </div>
     </CollapsibleSidebar>
   );
