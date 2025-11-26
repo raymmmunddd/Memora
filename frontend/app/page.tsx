@@ -1,8 +1,12 @@
+'use client'
+
 import React from 'react';
 import { ArrowRight, MessageSquare, HelpCircle, TrendingUp, Zap, Clock, BarChart2, BookOpen } from 'lucide-react';
-import './page.css';
+import './page-namespaced.css';
+import { useAuthRedirect } from '@/app/hooks/useAuthRedirect';
 
 export default function MemoraLanding() {
+  useAuthRedirect('/dashboard');
   return (
     <div className="landing-page">
       {/* Background */}
@@ -17,6 +21,7 @@ export default function MemoraLanding() {
       <nav className="navbar">
         <div className="nav-container">
           <div className="nav-logo">
+            <img src="/memmora.png" alt="Memora AI Logo" className="logo-image" />
             <span className="logo-text">Memora AI</span>
           </div>
           <div className="nav-links">

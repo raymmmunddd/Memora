@@ -10,6 +10,10 @@
   --color-accent-rgb: 236, 72, 153;
   --color-purple: #a855f7;
   --color-blue: #3b82f6;
+  --color-success: #10b981;
+  --color-success-rgb: 16, 185, 129;
+  --color-danger: #ef4444;
+  --color-danger-rgb: 239, 68, 68;
   
   /* Gray Scale */
   --color-gray-50: #f9fafb;
@@ -198,6 +202,29 @@ body {
   color: var(--color-primary-dark);
 }
 
+.btn-delete {
+  color: var(--color-danger);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-delete:hover {
+  background-color: rgba(var(--color-danger-rgb), 0.1);
+  color: #dc2626;
+}
+
+.btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Cards */
 .card {
   background-color: var(--color-white);
@@ -304,6 +331,20 @@ body {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.upload-item:hover {
+  border-color: var(--color-primary);
+  background-color: rgba(var(--color-primary-rgb), 0.02);
+  box-shadow: var(--shadow-sm);
+}
+
+.upload-item-selected {
+  border-color: var(--color-primary);
+  background-color: rgba(var(--color-primary-rgb), 0.05);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
 }
 
 .upload-item-icon {
@@ -326,6 +367,11 @@ body {
   color: var(--color-purple);
 }
 
+.upload-item-icon.icon-accent {
+  background-color: rgba(var(--color-accent-rgb), 0.1);
+  color: var(--color-accent);
+}
+
 .upload-item-icon .icon {
   width: 1.25rem;
   height: 1.25rem;
@@ -340,11 +386,26 @@ body {
   font-weight: 500;
   color: var(--color-gray-900);
   margin-bottom: var(--spacing-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .upload-item-date {
   font-size: 0.875rem;
   color: var(--color-gray-500);
+}
+
+.selected-indicator {
+  width: 2rem;
+  height: 2rem;
+  background-color: var(--color-success);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-white);
+  flex-shrink: 0;
 }
 
 .icon-sm {
@@ -374,6 +435,10 @@ body {
   flex-direction: column;
 }
 
+.setting-group-full {
+  grid-column: 1 / -1;
+}
+
 .setting-label {
   display: block;
   font-size: 0.875rem;
@@ -398,6 +463,28 @@ body {
   outline: none;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.setting-input {
+  width: 100%;
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-2) var(--spacing-4);
+  font-size: 1rem;
+  color: var(--color-gray-900);
+  background-color: var(--color-white);
+  margin-top: var(--spacing-2);
+  transition: var(--transition-colors);
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
+}
+
+.setting-input::placeholder {
+  color: var(--color-gray-400);
 }
 
 /* Quiz Type Buttons */
@@ -428,6 +515,7 @@ body {
 .quiz-type-btn.active {
   border-color: var(--color-primary);
   background-color: rgba(var(--color-primary-rgb), 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), 0.1);
 }
 
 .quiz-type-icon {
@@ -435,6 +523,10 @@ body {
   height: 1.25rem;
   color: var(--color-gray-600);
   margin-bottom: var(--spacing-1);
+}
+
+.quiz-type-btn.active .quiz-type-icon {
+  color: var(--color-primary);
 }
 
 .quiz-type-text {

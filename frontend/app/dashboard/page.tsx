@@ -20,7 +20,7 @@ import {
   Trophy
 } from 'lucide-react';
 import Link from 'next/link';
-import './dashboard.css';
+import './dashboard-namespaced.css';
 
 interface UserData {
   username: string;
@@ -48,6 +48,7 @@ interface DashboardStats {
 }
 
 export default function DashboardPage() {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const [user, setUser] = useState<UserData | null>(null);
   const [greeting, setGreeting] = useState('Welcome back');
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -87,7 +88,7 @@ export default function DashboardPage() {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('/api/dashboard/stats', {
+      const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -251,7 +252,7 @@ export default function DashboardPage() {
                     <div className="action-icon action-icon-gradient-1">
                       <HelpCircle size={20} />
                     </div>
-                    <p className="action-label">Start Quiz</p>
+                    <p className="action-label">Generate Quiz</p>
                   </Link>
 
                   <Link href="/chat" className="action-card">
@@ -261,7 +262,7 @@ export default function DashboardPage() {
                     <p className="action-label">Ask AI Tutor</p>
                   </Link>
 
-                  <Link href="/history" className="action-card">
+                  <Link href="/progress" className="action-card">
                     <div className="action-icon action-icon-gradient-3">
                       <BarChart2 size={20} />
                     </div>
@@ -298,12 +299,6 @@ export default function DashboardPage() {
                         );
                       })}
                     </div>
-                    {stats.recentActivities.length > 5 && (
-                      <Link href="/history" className="view-all-link">
-                        View all activity
-                        <ChevronRight size={16} />
-                      </Link>
-                    )}
                   </>
                 ) : (
                   <div className="empty-state">

@@ -60,13 +60,25 @@ router.get('/my-quizzes', quizController.getUserQuizzes);
 // Get user's quiz history
 router.get('/history', quizController.getUserQuizHistory);
 
+// ✅ ADD THIS - Get ALL user attempts (no quiz ID needed)
+router.get('/attempts', quizController.getAllUserAttempts);
+
+// ✅ Get attempts for a specific quiz
+router.get('/quiz/:quizId/attempts', quizController.getQuizAttempts);
+
+// ✅ Get single attempt details
+router.get('/attempts/:attemptId', quizController.getQuizAttempt);
+
+// ✅ Delete an attempt
+router.delete('/attempts/:attemptId', quizController.deleteAttempt);
+
 // Submit quiz attempt
 router.post('/:quizId/submit', quizController.submitQuizAttempt);
 
-// ✅ Move attempt route BEFORE the dynamic quizId route
-router.get('/attempts/:attemptId', quizController.getQuizAttempt);
-
-// Finally, get single quiz (must be last)
+// Finally, get single quiz (must be last to avoid route conflicts)
 router.get('/:quizId', quizController.getQuiz);
+
+// Delete file route 
+router.delete('/files/:fileId', quizController.deleteFile);
 
 module.exports = router;

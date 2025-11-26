@@ -9,6 +9,24 @@ const authMiddleware = require('../middleware/auth');
 router.use(authMiddleware);
 
 // =============================
+// File Upload Routes
+// =============================
+
+/**
+ * @route   POST /api/tutor/upload
+ * @desc    Upload a PDF or Word document
+ * @access  Private
+ */
+router.post('/upload', tutorController.uploadFile);
+
+/**
+ * @route   GET /api/tutor/files
+ * @desc    Get user's uploaded files
+ * @access  Private
+ */
+router.get('/files', tutorController.getUserFiles);
+
+// =============================
 // Tutor Chat Routes
 // =============================
 

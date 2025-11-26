@@ -3,15 +3,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import CollapsibleSidebar from '@/app/sidebar';
-import { Send, Bot, User, Loader2, Sparkles, BookOpen, FileText, Upload } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, BookOpen, FileText, Upload, X, File } from 'lucide-react';
 import { authService } from '@/services/auth.service';
-import './ai-tutor.css';
+import './ai-tutor-namespaced.css';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  attachedFiles?: AttachedFile[];
+}
+
+interface AttachedFile {
+  id: string;
+  name: string;
+  size: number;
+}
+
+interface UploadedFile {
+  _id: string;
+  original_name: string;
+  file_size: number;
+  mime_type: string;
+  is_processed: boolean;
+  createdAt: string;
 }
 
 interface ChatSession {
@@ -27,9 +43,11 @@ interface CurrentUser {
 }
 
 const AITutorPage: React.FC = () => {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -38,7 +56,7 @@ const AITutorPage: React.FC = () => {
     {
       id: '1',
       role: 'assistant',
-      content: "Hello! I'm your Memora AI Tutor. I can help explain concepts, solve problems, and quiz you on any subject. What would you like to learn about today?",
+      content: "Hello! I'm your Memora AI Tutor. I can help explain concepts, solve problems, and quiz you on any subject. You can also upload PDF or Word documents for me to read and reference. What would you like to learn about today?",
       timestamp: new Date(),
     },
   ]);
@@ -47,6 +65,11 @@ const AITutorPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [recentSessions, setRecentSessions] = useState<ChatSession[]>([]);
+  
+  // File upload states
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   // Subscribe to auth changes
   useEffect(() => {
@@ -60,12 +83,14 @@ const AITutorPage: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch recent chat sessions
+  // Fetch recent chat sessions and uploaded files
   useEffect(() => {
     if (token) {
       fetchRecentSessions().catch(err => {
         console.error('Failed to load recent sessions:', err);
-        // Don't show error to user, just continue without recent sessions
+      });
+      fetchUploadedFiles().catch(err => {
+        console.error('Failed to load uploaded files:', err);
       });
     }
   }, [token]);
@@ -94,14 +119,94 @@ const AITutorPage: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setRecentSessions(data.sessions || []);
-      } else {
-        console.log('Recent sessions endpoint returned:', response.status);
-        // Don't throw error, just leave sessions empty
       }
     } catch (err) {
       console.error('Failed to fetch recent sessions:', err);
-      // Don't throw error, just leave sessions empty
     }
+  };
+
+  const fetchUploadedFiles = async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch('/api/tutor/files', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUploadedFiles(data.files || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch uploaded files:', err);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(file => {
+      const validTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      return validTypes.includes(file.type);
+    });
+
+    if (validFiles.length !== files.length) {
+      setError('Only PDF and Word documents are allowed');
+      setTimeout(() => setError(''), 3000);
+    }
+
+    setSelectedFiles(prev => [...prev, ...validFiles]);
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0 || !token) return [];
+
+    setIsUploading(true);
+    const uploadedFileIds: string[] = [];
+
+    try {
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch('/api/tutor/upload', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          uploadedFileIds.push(data.file._id);
+        } else {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+      }
+
+      setSelectedFiles([]);
+      await fetchUploadedFiles();
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload files');
+    } finally {
+      setIsUploading(false);
+    }
+
+    return uploadedFileIds;
   };
 
   const handleSendMessage = async () => {
@@ -110,17 +215,33 @@ const AITutorPage: React.FC = () => {
       return;
     }
 
-    if (!inputMessage.trim() || isLoading) return;
+    if ((!inputMessage.trim() && selectedFiles.length === 0) || isLoading || isUploading) return;
+
+    // Upload files first if any are selected
+    let fileIds: string[] = [];
+    if (selectedFiles.length > 0) {
+      fileIds = await uploadFiles();
+      if (fileIds.length === 0 && selectedFiles.length > 0) {
+        setError('Failed to upload files. Please try again.');
+        return;
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputMessage.trim(),
+      content: inputMessage.trim() || '📎 Uploaded files',
       timestamp: new Date(),
+      attachedFiles: fileIds.length > 0 ? fileIds.map((id, idx) => ({
+        id,
+        name: selectedFiles[idx]?.name || 'file',
+        size: selectedFiles[idx]?.size || 0,
+      })) : undefined,
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage('');
+    setSelectedFiles([]);
     setIsLoading(true);
     setError('');
 
@@ -134,6 +255,7 @@ const AITutorPage: React.FC = () => {
         body: JSON.stringify({
           message: userMessage.content,
           sessionId: sessionId,
+          fileIds: fileIds.length > 0 ? fileIds : undefined,
           conversationHistory: messages.map((m) => ({
             role: m.role,
             content: m.content,
@@ -196,18 +318,19 @@ const AITutorPage: React.FC = () => {
       {
         id: '1',
         role: 'assistant',
-        content: "Hello! I'm your Memora AI Tutor. I can help explain concepts, solve problems, and quiz you on any subject. What would you like to learn about today?",
+        content: "Hello! I'm your Memora AI Tutor. I can help explain concepts, solve problems, and quiz you on any subject. You can also upload PDF or Word documents for me to read and reference. What would you like to learn about today?",
         timestamp: new Date(),
       },
     ]);
     setError('');
+    setSelectedFiles([]);
   };
 
   const handleLoadSession = async (session: ChatSession) => {
     if (!token) return;
 
     try {
-      const response = await fetch(`/api/tutor/sessions/${session._id}`, {
+      const response = await fetch(`${API_BASE_URL}/tutor/sessions/${session._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -247,6 +370,12 @@ const AITutorPage: React.FC = () => {
     if (diffDays === 2) return 'Yesterday';
     if (diffDays <= 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   return (
@@ -326,6 +455,16 @@ const AITutorPage: React.FC = () => {
                       </span>
                     </div>
                     <div className="message-text">{message.content}</div>
+                    {message.attachedFiles && message.attachedFiles.length > 0 && (
+                      <div className="attached-files">
+                        {message.attachedFiles.map((file) => (
+                          <div key={file.id} className="attached-file-badge">
+                            <File className="file-badge-icon" />
+                            <span>{file.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -352,23 +491,61 @@ const AITutorPage: React.FC = () => {
 
             {/* Input area */}
             <div className="input-container">
+              {/* Selected files preview */}
+              {selectedFiles.length > 0 && (
+                <div className="selected-files-preview">
+                  {selectedFiles.map((file, index) => (
+                    <div key={index} className="selected-file-item">
+                      <File className="file-icon" />
+                      <div className="file-details">
+                        <span className="file-name">{file.name}</span>
+                        <span className="file-size">{formatFileSize(file.size)}</span>
+                      </div>
+                      <button
+                        className="remove-file-btn"
+                        onClick={() => removeSelectedFile(index)}
+                        disabled={isUploading}
+                      >
+                        <X className="remove-icon" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="input-wrapper">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
                 <textarea
                   ref={textareaRef}
                   className="message-input"
-                  placeholder="Type your question here..."
+                  placeholder="Type your question here or upload a document..."
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  disabled={isLoading || !token}
+                  disabled={isLoading || isUploading || !token}
                   rows={1}
                 />
                 <button
                   className="btn-send"
-                  onClick={handleSendMessage}
-                  disabled={!inputMessage.trim() || isLoading || !token}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading || isUploading || !token}
+                  title="Upload PDF or Word document"
                 >
-                  {isLoading ? (
+                  <Upload className="btn-icon" />
+                </button>
+                <button
+                  className="btn-send"
+                  onClick={handleSendMessage}
+                  disabled={(!inputMessage.trim() && selectedFiles.length === 0) || isLoading || isUploading || !token}
+                >
+                  {isLoading || isUploading ? (
                     <Loader2 className="btn-icon animate-spin" />
                   ) : (
                     <Send className="btn-icon" />
@@ -379,7 +556,7 @@ const AITutorPage: React.FC = () => {
                 <p className="input-hint error">Please log in to use the AI Tutor</p>
               )}
               <p className="input-hint">
-                Press Enter to send, Shift+Enter for new line
+                Press Enter to send, Shift+Enter for new line • Upload PDF or Word files
               </p>
             </div>
           </div>

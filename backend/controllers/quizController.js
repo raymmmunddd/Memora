@@ -166,31 +166,67 @@ const generateQuizWithAI = async (extractedTexts, settings) => {
     ? combinedText.substring(0, maxLength) + '\n\n[Text truncated due to length...]'
     : combinedText;
   
-  const prompt = `You are an expert educational quiz generator. Generate ${settings.numQuestions} ${settings.difficulty} difficulty ${settings.quiz_type} questions based on the following study materials.
+  // Handle multiple quiz types with backward compatibility
+  const quizTypes = Array.isArray(settings.quiz_types) 
+    ? settings.quiz_types 
+    : (settings.quiz_type ? [settings.quiz_type] : ['multiple-choice']); // Fallback
+  
+  const totalQuestions = parseInt(settings.numQuestions);
+  
+  // Generate type-specific instructions
+  const typeInstructions = quizTypes.map(type => {
+    if (type === 'multiple-choice') {
+      return `- Multiple Choice questions with 4 options each, where correct_answer must match one option exactly`;
+    } else if (type === 'fill-blank') {
+      return `- Identification/Fill-in-the-blank questions with empty options array []`;
+    }
+    return '';
+  }).join('\n');
+  
+  // Build prompt based on number of types
+  let typeDescription = '';
+  if (quizTypes.length === 1) {
+    typeDescription = `all ${quizTypes[0]} questions`;
+  } else {
+    typeDescription = `a mix of ${quizTypes.join(' and ')} questions`;
+  }
+  
+  const prompt = `You are an expert educational quiz generator. Generate ${totalQuestions} questions with ${settings.difficulty} difficulty based on the following study materials.
 
 STUDY MATERIALS:
 ${truncatedText}
 
-Generate ${settings.numQuestions} questions in JSON array format. Each question must have:
+Generate ${typeDescription} totaling ${totalQuestions} questions. The questions should include:
+${typeInstructions}
+
+Each question must have:
 - question_text: the question
-- question_type: "${settings.quiz_type}"
-- options: ${settings.quiz_type === 'multiple-choice' ? 'array of 4 choices' : 'empty array []'}
-- correct_answer: the correct answer${settings.quiz_type === 'multiple-choice' ? ' (must match one of the options exactly)' : ''}
+- question_type: either "${quizTypes.join('" or "')}"
+- options: array of 4 choices for multiple-choice, empty array [] for fill-blank
+- correct_answer: the correct answer (must match one option exactly for multiple-choice)
 - explanation: brief explanation of the answer
 
-Example:
+Example format:
 [
   {
     "question_text": "What is the capital of France?",
-    "question_type": "${settings.quiz_type}",
-    "options": ${settings.quiz_type === 'multiple-choice' ? '["Paris", "London", "Berlin", "Madrid"]' : '[]'},
+    "question_type": "multiple-choice",
+    "options": ["Paris", "London", "Berlin", "Madrid"],
     "correct_answer": "Paris",
     "explanation": "Paris is the capital and largest city of France."
+  },
+  {
+    "question_text": "The process by which plants make food is called ____.",
+    "question_type": "fill-blank",
+    "options": [],
+    "correct_answer": "photosynthesis",
+    "explanation": "Photosynthesis is the process where plants convert light energy into chemical energy."
   }
 ]`;
 
   try {
     console.log('→ Calling Gemini API...');
+    console.log('→ Quiz types:', quizTypes);
     
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -228,7 +264,6 @@ Example:
 
     const data = await response.json();
     console.log('✓ API Response received');
-    console.log('Full API response:', JSON.stringify(data, null, 2));
     
     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
       console.error('❌ Unexpected API response structure:', data);
@@ -236,7 +271,6 @@ Example:
     }
     
     let textContent = data.candidates[0].content.parts[0].text;
-    console.log('Raw AI response:', textContent);
     console.log('Raw AI response length:', textContent.length);
 
     let questions;
@@ -255,7 +289,6 @@ Example:
       
       if (firstBracket === -1 || lastBracket === -1) {
         console.error('❌ No JSON array found in response');
-        console.error('Full text content:', textContent);
         throw new Error('AI response does not contain a JSON array');
       }
       
@@ -263,37 +296,24 @@ Example:
       textContent = textContent.replace(/[""]/g, '"').replace(/['']/g, "'");
       textContent = textContent.replace(/,(\s*[}\]])/g, '$1');
       
-      console.log('Cleaned text:', textContent.substring(0, 500));
-      
-      try {
-        questions = JSON.parse(textContent);
-        console.log('✓ JSON parse successful after cleanup');
-      } catch (secondError) {
-        console.error('❌ JSON Parse Error after cleanup:', secondError.message);
-        console.error('Failed text:', textContent);
-        throw new Error(`JSON parsing failed: ${secondError.message}`);
-      }
+      questions = JSON.parse(textContent);
+      console.log('✓ JSON parse successful after cleanup');
     }
 
-    console.log('Parsed data type:', typeof questions, Array.isArray(questions));
-    console.log('Parsed data:', JSON.stringify(questions, null, 2));
-    
     if (!Array.isArray(questions)) {
-      console.error('❌ Response is not an array, got:', typeof questions);
-      console.error('Data structure:', questions);
       throw new Error(`Generated response is not an array. Got: ${typeof questions}`);
     }
     
     if (questions.length === 0) {
-      console.error('❌ Questions array is empty');
       throw new Error('Generated questions array is empty');
     }
 
     console.log('Raw questions count:', questions.length);
 
+    // Validate questions against selected types
     const validQuestions = questions.filter(q => {
       const hasQuestionText = q && q.question_text && typeof q.question_text === 'string';
-      const hasQuestionType = q && q.question_type;
+      const hasQuestionType = q && q.question_type && quizTypes.includes(q.question_type);
       const hasCorrectAnswer = q && q.correct_answer;
       const hasValidOptions = q.question_type !== 'multiple-choice' || (Array.isArray(q.options) && q.options.length >= 2);
       
@@ -308,20 +328,23 @@ Example:
 
     if (validQuestions.length === 0) {
       console.error('❌ No valid questions found after filtering');
-      console.error('Original questions:', JSON.stringify(questions, null, 2));
       throw new Error('No valid questions found in AI response');
     }
 
-    const requestedNum = parseInt(settings.numQuestions);
-    if (validQuestions.length < requestedNum * 0.5) {
-      console.error(`❌ Only ${validQuestions.length} valid questions out of ${requestedNum} requested`);
-      throw new Error(`Only generated ${validQuestions.length} valid questions out of ${requestedNum} requested`);
+    if (validQuestions.length < totalQuestions * 0.5) {
+      console.error(`❌ Only ${validQuestions.length} valid questions out of ${totalQuestions} requested`);
+      throw new Error(`Only generated ${validQuestions.length} valid questions out of ${totalQuestions} requested`);
     }
 
     console.log('✓ Parsed', validQuestions.length, 'valid questions');
+    console.log('Question type distribution:');
+    quizTypes.forEach(type => {
+      const count = validQuestions.filter(q => q.question_type === type).length;
+      console.log(`  - ${type}: ${count} questions`);
+    });
     console.log('==================== AI GENERATION END ====================\n');
 
-    return validQuestions.slice(0, requestedNum);
+    return validQuestions.slice(0, totalQuestions);
   } catch (error) {
     console.error('❌❌❌ AI GENERATION ERROR ❌❌❌');
     console.error('Error message:', error.message);
@@ -474,15 +497,20 @@ exports.uploadFiles = async (req, res) => {
 exports.generateQuiz = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { fileIds, quizType, numQuestions, difficulty, timeLimit } = req.body;
+    const { fileIds, quizTypes, numQuestions, difficulty, timeLimit } = req.body;
 
     console.log('==================== QUIZ GENERATION START ====================');
     console.log('User ID:', userId);
     console.log('File IDs:', fileIds);
-    console.log('Settings:', { quizType, numQuestions, difficulty, timeLimit });
+    console.log('Settings:', { quizTypes, numQuestions, difficulty, timeLimit });
 
     if (!fileIds || fileIds.length === 0) {
       return res.status(400).json({ error: 'No files selected' });
+    }
+
+    // Add validation for quizTypes
+    if (!quizTypes || quizTypes.length === 0) {
+      return res.status(400).json({ error: 'No quiz types selected' });
     }
 
     const files = await UploadedFile.find({
@@ -511,7 +539,7 @@ exports.generateQuiz = async (req, res) => {
     const quiz = await Quiz.create({
       user_id: userId,
       title: `Quiz - ${new Date().toLocaleDateString()}`,
-      quiz_type: quizType,
+      quiz_type: Array.isArray(quizTypes) ? quizTypes : [quizTypes], // Ensure it's always an array
       difficulty: difficulty,
       time_limit: timeLimit === 'none' ? null : parseInt(timeLimit),
       source_files: files.map((f) => ({
@@ -525,7 +553,7 @@ exports.generateQuiz = async (req, res) => {
     console.log('✓ Quiz record created, ID:', quiz._id);
 
     const settings = {
-      quiz_type: quizType,
+      quiz_types: Array.isArray(quizTypes) ? quizTypes : [quizTypes], // Ensure array
       numQuestions: numQuestions,
       difficulty: difficulty,
     };
@@ -747,5 +775,190 @@ exports.getUserQuizHistory = async (req, res) => {
   } catch (error) {
     console.error('Get User Quiz History Error:', error);
     res.status(500).json({ error: 'Failed to fetch quiz history' });
+  }
+};
+
+// Get all quiz attempts for the user
+exports.getAllUserAttempts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    console.log('==================== FETCH ALL ATTEMPTS ====================');
+    console.log('User ID:', userId);
+
+    const attempts = await QuizAttempt.find({
+      user_id: userId,
+      is_deleted: false,
+    })
+      .populate({
+        path: 'quiz_id',
+        select: 'title difficulty quiz_type questions',
+      })
+      .sort({ completed_at: -1 }) // Sort by most recent first
+      .lean(); // Convert to plain JavaScript objects
+
+    console.log('✓ Found', attempts.length, 'attempts');
+    console.log('==================== FETCH COMPLETE ====================\n');
+
+    res.status(200).json({
+      success: true,
+      count: attempts.length,
+      attempts: attempts,
+    });
+
+  } catch (error) {
+    console.error('❌❌❌ GET ALL ATTEMPTS ERROR ❌❌❌');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==========================================\n');
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch quiz attempts',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Get attempts for a specific quiz
+exports.getQuizAttempts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { quizId } = req.params;
+
+    console.log('==================== FETCH QUIZ ATTEMPTS ====================');
+    console.log('User ID:', userId);
+    console.log('Quiz ID:', quizId);
+
+    const attempts = await QuizAttempt.find({
+      user_id: userId,
+      quiz_id: quizId,
+      is_deleted: false,
+    })
+      .populate({
+        path: 'quiz_id',
+        select: 'title difficulty',
+      })
+      .sort({ completed_at: -1 })
+      .lean();
+
+    console.log('✓ Found', attempts.length, 'attempts for quiz');
+    console.log('==================== FETCH COMPLETE ====================\n');
+
+    res.status(200).json({
+      success: true,
+      count: attempts.length,
+      attempts: attempts,
+    });
+
+  } catch (error) {
+    console.error('❌❌❌ GET QUIZ ATTEMPTS ERROR ❌❌❌');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==========================================\n');
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch quiz attempts',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Delete/soft delete an attempt
+exports.deleteAttempt = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { attemptId } = req.params;
+
+    console.log('==================== DELETE ATTEMPT ====================');
+    console.log('User ID:', userId);
+    console.log('Attempt ID:', attemptId);
+
+    const attempt = await QuizAttempt.findOneAndUpdate(
+      {
+        _id: attemptId,
+        user_id: userId,
+      },
+      {
+        is_deleted: true,
+        deleted_at: new Date(),
+      },
+      { new: true }
+    );
+
+    if (!attempt) {
+      console.log('❌ Attempt not found');
+      return res.status(404).json({
+        success: false,
+        error: 'Quiz attempt not found',
+      });
+    }
+
+    console.log('✓ Attempt deleted successfully');
+    console.log('==================== DELETE COMPLETE ====================\n');
+
+    res.status(200).json({
+      success: true,
+      message: 'Quiz attempt deleted successfully',
+    });
+
+  } catch (error) {
+    console.error('❌❌❌ DELETE ATTEMPT ERROR ❌❌❌');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==========================================\n');
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete quiz attempt',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+exports.deleteFile = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const userId = req.user.id;
+
+    console.log('==================== DELETE FILE ====================');
+    console.log('User ID:', userId);
+    console.log('File ID:', fileId);
+
+    // Find and delete the file from database
+    const file = await UploadedFile.findOneAndDelete({
+      _id: fileId,
+      user_id: userId,
+    });
+
+    if (!file) {
+      console.log('❌ File not found');
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Delete physical file from disk
+    try {
+      await fs.unlink(file.file_path);
+      console.log('✓ Physical file deleted from disk');
+    } catch (err) {
+      console.error('⚠️ Error deleting physical file:', err.message);
+      // Continue even if physical file deletion fails
+    }
+
+    console.log('✓ File deleted successfully');
+    console.log('==================== DELETE COMPLETE ====================\n');
+
+    res.json({ 
+      message: 'File deleted successfully',
+      fileId: file._id 
+    });
+  } catch (error) {
+    console.error('❌❌❌ DELETE FILE ERROR ❌❌❌');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('==========================================\n');
+    
+    res.status(500).json({ error: 'Failed to delete file' });
   }
 };

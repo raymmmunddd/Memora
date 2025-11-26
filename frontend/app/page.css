@@ -144,7 +144,7 @@ body {
   left: 0;
   right: 0;
   z-index: var(--z-sticky);
-  background-color: var(--color-white-translucent);
+  background-color: var(--gradient-background);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--color-gray-200);
   padding: var(--spacing-lg) 0;
@@ -160,12 +160,27 @@ body {
 }
 
 .nav-logo {
+  display: flex;
+  align-items: center; 
+  gap: 0.5rem;         
   font-size: 1.5rem;
   font-weight: 700;
   background: var(--gradient-primary);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.logo-image {
+  height: 4rem;
+  width: auto;
+  margin: 0;            
+  display: inline-block; 
+}
+
+.logo-text {
+  font-size: 2rem;
+  font-weight: 700;
 }
 
 .nav-links {

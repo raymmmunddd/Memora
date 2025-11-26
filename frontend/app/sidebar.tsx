@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, MessageSquare, ClipboardList, History, Settings, ChevronLeft, ChevronRight, Sparkles, LogOut, Menu, X } from 'lucide-react';
+import { Home, MessageSquare, ClipboardList, History, Settings, ChevronLeft, ChevronRight, Sparkles, LogOut, Menu, X, Goal } from 'lucide-react';
 import { authService } from '@/services/auth.service';
+import Swal from 'sweetalert2';
 
 interface SidebarProps {
   children: React.ReactNode;
@@ -50,14 +51,89 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
       label: 'Quiz History',
       href: '/history',
     },
+    {
+      icon: Goal,
+      label: 'Progress',
+      href: '/progress',
+    },
+    {
+      icon: Settings,
+      label: 'Profile',
+      href: '/profile',
+    },
   ];
 
   const handleLogout = async () => {
-    try {
-      await authService.logout();
-      router.push('/auth');
-    } catch (error) {
-      console.error('Logout failed:', error);
+    const result = await Swal.fire({
+      title: 'Logout Confirmation',
+      text: 'Are you sure you want to logout?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#8b5cf6',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, logout',
+      cancelButtonText: 'Cancel',
+      background: '#1f1f1f',
+      color: '#ffffff',
+      customClass: {
+        popup: 'swal-dark-popup',
+        title: 'swal-dark-title',
+        htmlContainer: 'swal-dark-text',
+        confirmButton: 'swal-confirm-button',
+        cancelButton: 'swal-cancel-button'
+      }
+    });
+
+    if (result.isConfirmed) {
+      try {
+        // Show loading state
+        Swal.fire({
+          title: 'Logging out...',
+          text: 'Please wait',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          background: '#1f1f1f',
+          color: '#ffffff',
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        await authService.logout();
+        
+        // Show success message
+        await Swal.fire({
+          title: 'Logged Out!',
+          text: 'You have been successfully logged out.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#1f1f1f',
+          color: '#ffffff',
+          customClass: {
+            popup: 'swal-dark-popup'
+          }
+        });
+
+        router.push('/auth');
+      } catch (error) {
+        console.error('Logout failed:', error);
+        
+        // Show error message
+        Swal.fire({
+          title: 'Error!',
+          text: 'Failed to logout. Please try again.',
+          icon: 'error',
+          confirmButtonColor: '#8b5cf6',
+          background: '#1f1f1f',
+          color: '#ffffff',
+          customClass: {
+            popup: 'swal-dark-popup',
+            confirmButton: 'swal-confirm-button'
+          }
+        });
+      }
     }
   };
 
@@ -170,6 +246,13 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
           justify-content: center;
           color: white;
           flex-shrink: 0;
+        }
+
+        .logo-image {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 0.5rem;
         }
 
         .logo-text {
@@ -319,6 +402,44 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
           min-width: 0;
         }
 
+        /* SweetAlert2 Custom Styles */
+        .swal-dark-popup {
+          border: 1px solid #2a2a2a !important;
+          border-radius: 1rem !important;
+        }
+
+        .swal-dark-title {
+          font-weight: 600 !important;
+          font-size: 1.5rem !important;
+        }
+
+        .swal-dark-text {
+          color: #d1d5db !important;
+        }
+
+        .swal-confirm-button {
+          border-radius: 0.5rem !important;
+          padding: 0.75rem 1.5rem !important;
+          font-weight: 500 !important;
+          transition: all 200ms ease !important;
+        }
+
+        .swal-confirm-button:hover {
+          opacity: 0.9 !important;
+          transform: translateY(-1px) !important;
+        }
+
+        .swal-cancel-button {
+          border-radius: 0.5rem !important;
+          padding: 0.75rem 1.5rem !important;
+          font-weight: 500 !important;
+          transition: all 200ms ease !important;
+        }
+
+        .swal-cancel-button:hover {
+          opacity: 0.9 !important;
+        }
+
         @media (max-width: 768px) {
           .mobile-menu-button {
             display: flex;
@@ -387,7 +508,7 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
         <div className="sidebar-header">
           <Link href="/dashboard" className="sidebar-logo" onClick={handleLinkClick}>
             <div className="logo-icon">
-              <Sparkles size={18} />
+              <img src="/memmora.png" alt="Memora AI Logo" className="logo-image" />
             </div>
             <span className="logo-text">Memora AI</span>
           </Link>

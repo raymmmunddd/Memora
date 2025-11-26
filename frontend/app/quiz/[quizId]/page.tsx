@@ -13,7 +13,7 @@ import {
   Send,
   Loader2,
 } from 'lucide-react';
-import './take-quiz.css';
+import './take-quiz-namespaced.css';
 
 interface Question {
   _id: string;
@@ -45,6 +45,7 @@ interface CurrentUser {
 }
 
 const TakeQuizPage: React.FC = () => {
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
   const params = useParams();
   const router = useRouter();
   const quizId = params.quizId as string;
@@ -124,7 +125,7 @@ const TakeQuizPage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/quiz/${quizId}`, {
+      const response = await fetch(`${API_BASE_URL}/quiz/${quizId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -181,7 +182,7 @@ const TakeQuizPage: React.FC = () => {
         time_spent: 0,
       }));
 
-      const response = await fetch(`/api/quiz/${quizId}/submit`, {
+      const response = await fetch(`${API_BASE_URL}/quiz/${quizId}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -39,9 +39,22 @@ const quizSchema = new mongoose.Schema(
       trim: true,
     },
     quiz_type: {
-      type: String,
-      enum: ['multiple-choice', 'fill-blank'],
+      type: mongoose.Schema.Types.Mixed, 
       required: true,
+      validate: {
+        validator: function(v) {
+          if (typeof v === 'string') {
+            return ['multiple-choice', 'fill-blank'].includes(v);
+          }
+          if (Array.isArray(v)) {
+            return v.length > 0 && v.every(type => 
+              ['multiple-choice', 'fill-blank'].includes(type)
+            );
+          }
+          return false;
+        },
+        message: 'Invalid quiz type(s)'
+      }
     },
     difficulty: {
       type: String,
@@ -50,7 +63,7 @@ const quizSchema = new mongoose.Schema(
     },
     time_limit: {
       type: Number,
-      default: null, // in minutes, null means no limit
+      default: null, 
     },
     questions: [questionSchema],
     source_files: [{
@@ -84,6 +97,13 @@ const quizSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+quizSchema.virtual('quiz_types').get(function() {
+  return Array.isArray(this.quiz_type) ? this.quiz_type : [this.quiz_type];
+});
+
+quizSchema.set('toJSON', { virtuals: true });
+quizSchema.set('toObject', { virtuals: true });
 
 // Index for efficient queries
 quizSchema.index({ user_id: 1, createdAt: -1 });

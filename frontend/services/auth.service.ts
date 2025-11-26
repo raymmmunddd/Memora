@@ -123,10 +123,18 @@ export const authService = {
     return !!this.getToken();
   },
 
-  // --- NEW: Subscribe to user changes ---
+  // Update user data in memory and localStorage
+  updateUser(updates: Partial<User>): void {
+    if (currentUser) {
+      currentUser = { ...currentUser, ...updates };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      this.notifySubscribers(currentUser);
+    }
+  },
+
+  // Subscribe to user changes
   subscribe(callback: (user: User | null) => void) {
     subscribers.push(callback);
-    // Immediately call with current value
     callback(currentUser);
     return () => {
       const index = subscribers.indexOf(callback);

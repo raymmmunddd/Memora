@@ -36,12 +36,16 @@ const authRoutes = require('./routes/auth.routes');
 const quizRoutes = require('./routes/quiz');
 const tutorRoutes = require('./routes/tutorRoutes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const userRoutes = require('./routes/users');
+const progressRoutes = require('./routes/progress.routes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/tutor', tutorRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/progress', progressRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
