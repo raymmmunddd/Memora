@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Send,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import './take-quiz-namespaced.css';
 
@@ -51,7 +52,7 @@ const TakeQuizPage: React.FC = () => {
   const quizId = params.quizId as string;
 
   const [user, setUser] = useState<CurrentUser | null>(null);
-  const [token, setToken] = useState<string | null | undefined>(undefined); // undefined = not checked yet
+  const [token, setToken] = useState<string | null | undefined>(undefined);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -60,13 +61,13 @@ const TakeQuizPage: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [showIncompleteWarning, setShowIncompleteWarning] = useState<boolean>(false);
 
   // Subscribe to auth changes
   useEffect(() => {
     const currentToken = authService.getToken();
     setToken(currentToken);
 
-    // Check if token exists, if not redirect
     if (!currentToken) {
       setError('You must be logged in to take a quiz.');
       setLoading(false);
@@ -89,7 +90,6 @@ const TakeQuizPage: React.FC = () => {
     if (token) {
       fetchQuiz();
     } else if (token === null) {
-      // Token is explicitly null (not just uninitialized)
       setLoading(false);
       setError('You must be logged in to take a quiz.');
     }
@@ -97,7 +97,7 @@ const TakeQuizPage: React.FC = () => {
 
   useEffect(() => {
     if (quiz?.time_limit && timeRemaining === null) {
-      setTimeRemaining(quiz.time_limit * 60); // Convert minutes to seconds
+      setTimeRemaining(quiz.time_limit * 60);
     }
   }, [quiz, timeRemaining]);
 
@@ -106,7 +106,7 @@ const TakeQuizPage: React.FC = () => {
       const timer = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev === null || prev <= 1) {
-            handleSubmitQuiz();
+            handleSubmitQuiz(true); // Force submit when time runs out
             return 0;
           }
           return prev - 1;
@@ -154,6 +154,7 @@ const TakeQuizPage: React.FC = () => {
 
   const handleAnswerChange = (questionId: string, answer: string) => {
     setAnswers((prev) => new Map(prev).set(questionId, answer));
+    setShowIncompleteWarning(false); // Hide warning when user answers
   };
 
   const handleNextQuestion = () => {
@@ -168,8 +169,37 @@ const TakeQuizPage: React.FC = () => {
     }
   };
 
-  const handleSubmitQuiz = async () => {
+  const areAllQuestionsAnswered = (): boolean => {
+    if (!quiz) return false;
+    return quiz.questions.every((q) => {
+      const answer = answers.get(q._id);
+      return answer !== undefined && answer.trim() !== '';
+    });
+  };
+
+  const getUnansweredQuestions = (): number[] => {
+    if (!quiz) return [];
+    return quiz.questions
+      .map((q, index) => {
+        const answer = answers.get(q._id);
+        return answer === undefined || answer.trim() === '' ? index : -1;
+      })
+      .filter((index) => index !== -1);
+  };
+
+  const handleSubmitQuiz = async (forceSubmit: boolean = false) => {
     if (!quiz || !token) return;
+
+    // Check if all questions are answered (unless forced by timer)
+    if (!forceSubmit && !areAllQuestionsAnswered()) {
+      setShowIncompleteWarning(true);
+      const unanswered = getUnansweredQuestions();
+      if (unanswered.length > 0) {
+        // Navigate to first unanswered question
+        setCurrentQuestionIndex(unanswered[0]);
+      }
+      return;
+    }
 
     setIsSubmitting(true);
     setError('');
@@ -258,6 +288,8 @@ const TakeQuizPage: React.FC = () => {
 
   const currentQuestion = quiz.questions[currentQuestionIndex];
   const currentAnswer = answers.get(currentQuestion._id) || '';
+  const allAnswered = areAllQuestionsAnswered();
+  const unansweredCount = getUnansweredQuestions().length;
 
   return (
     <CollapsibleSidebar>
@@ -293,6 +325,28 @@ const TakeQuizPage: React.FC = () => {
           </div>
           <span className="progress-text">{getProgress()}% Complete</span>
         </div>
+
+        {/* Incomplete Warning */}
+        {showIncompleteWarning && (
+          <div className="incomplete-warning" style={{
+            backgroundColor: '#fef3c7',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <AlertCircle style={{ color: '#f59e0b', flexShrink: 0 }} size={20} />
+            <div>
+              <strong style={{ color: '#92400e' }}>Incomplete Quiz</strong>
+              <p style={{ margin: '4px 0 0 0', color: '#78350f', fontSize: '14px' }}>
+                Please answer all questions before submitting. You have {unansweredCount} unanswered question{unansweredCount !== 1 ? 's' : ''}.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Question Card */}
         <div className="question-card">
@@ -351,8 +405,13 @@ const TakeQuizPage: React.FC = () => {
             {currentQuestionIndex === quiz.questions.length - 1 ? (
               <button
                 className="submit-button"
-                onClick={handleSubmitQuiz}
-                disabled={isSubmitting}
+                onClick={() => handleSubmitQuiz(false)}
+                disabled={isSubmitting || !allAnswered}
+                style={{
+                  opacity: !allAnswered && !isSubmitting ? 0.5 : 1,
+                  cursor: !allAnswered && !isSubmitting ? 'not-allowed' : 'pointer'
+                }}
+                title={!allAnswered ? 'Please answer all questions before submitting' : ''}
               >
                 {isSubmitting ? (
                   <>
@@ -362,7 +421,7 @@ const TakeQuizPage: React.FC = () => {
                 ) : (
                   <>
                     <Send className="nav-icon" />
-                    Submit Quiz
+                    Submit Quiz {!allAnswered && `(${unansweredCount} unanswered)`}
                   </>
                 )}
               </button>
@@ -377,18 +436,25 @@ const TakeQuizPage: React.FC = () => {
 
         {/* Question Grid */}
         <div className="question-grid-card">
-          <h3 className="grid-title">Questions Overview</h3>
+          <h3 className="grid-title">
+            Questions Overview 
+            <span style={{ fontSize: '14px', fontWeight: 'normal', marginLeft: '8px', color: '#6b7280' }}>
+              ({answers.size}/{quiz.questions.length} answered)
+            </span>
+          </h3>
           <div className="question-grid">
             {quiz.questions.map((q, index) => (
               <button
                 key={q._id}
                 className={`grid-item ${index === currentQuestionIndex ? 'current' : ''} ${
-                  answers.has(q._id) ? 'answered' : ''
+                  answers.has(q._id) && answers.get(q._id)?.trim() !== '' ? 'answered' : ''
                 }`}
                 onClick={() => setCurrentQuestionIndex(index)}
               >
                 <span>{index + 1}</span>
-                {answers.has(q._id) && <CheckCircle className="answered-icon" />}
+                {answers.has(q._id) && answers.get(q._id)?.trim() !== '' && (
+                  <CheckCircle className="answered-icon" />
+                )}
               </button>
             ))}
           </div>
