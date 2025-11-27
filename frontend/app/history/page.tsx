@@ -27,8 +27,8 @@ interface Quiz {
   quiz_type: string;
   time_limit: number | null;
   created_at: string;
-  questions?: any[]; // Optional since my-quizzes endpoint excludes this
-  question_count?: number; // In case backend adds this field
+  questions?: any[]; 
+  question_count?: number; 
 }
 
 interface Attempt {
@@ -345,7 +345,7 @@ const QuizHistoryPage: React.FC = () => {
                     <div className="quiz-card-meta">
                       <div className="meta-item">
                         <Target className="meta-icon" />
-                        <span>{quiz.questions?.length || 0} Questions</span>
+                        <span>{quiz.question_count || 0} Questions</span>
                       </div>
                       <div className="meta-item">
                         <Clock className="meta-icon" />
