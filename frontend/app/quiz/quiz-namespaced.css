@@ -304,6 +304,8 @@
 /* Recent Uploads */
 .quiz-page .recent-uploads {
   margin-top: var(--spacing-8);
+  width: 100%;
+  overflow: hidden;
 }
 
 .quiz-page .recent-uploads-title {
@@ -316,6 +318,8 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--spacing-4);
+  width: 100%;
+  overflow: hidden;
 }
 
 @media (min-width: 768px) {
@@ -330,9 +334,11 @@
   padding: var(--spacing-4);
   display: flex;
   align-items: center;
-  gap: var(--spacing-4);
+  gap: var(--spacing-3);  /* Reduced from spacing-4 */
   transition: all var(--transition-base);
   position: relative;
+  overflow: hidden;  /* Added */
+  max-width: 100%;  /* Added */
 }
 
 .quiz-page .upload-item:hover {
@@ -380,6 +386,8 @@
 .quiz-page .upload-item-info {
   flex: 1;
   min-width: 0;
+  overflow: hidden;  /* Added */
+  max-width: 100%;  /* Added */
 }
 
 .quiz-page .upload-item-name {
@@ -604,5 +612,18 @@
   
   .quiz-page .upload-area {
     padding: var(--spacing-6);
+  }
+  
+  .quiz-page .upload-item {
+    padding: var(--spacing-3);
+    gap: var(--spacing-2);
+  }
+  
+  .quiz-page .upload-item-name {
+    font-size: 0.875rem;
+  }
+  
+  .quiz-page .upload-item-date {
+    font-size: 0.75rem;
   }
 }
