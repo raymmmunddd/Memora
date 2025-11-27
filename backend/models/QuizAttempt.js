@@ -9,14 +9,14 @@ const answerSchema = new mongoose.Schema({
   },
   user_answer: {
     type: String,
-    required: true,
+    default: '',
   },
   is_correct: {
     type: Boolean,
     required: true,
   },
   time_spent: {
-    type: Number, // in seconds
+    type: Number,
     default: 0,
   },
 });
@@ -27,13 +27,11 @@ const quizAttemptSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Quiz',
       required: true,
-      index: true,
     },
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-      index: true,
     },
     answers: [answerSchema],
     score: {
@@ -51,7 +49,7 @@ const quizAttemptSchema = new mongoose.Schema(
       required: true,
     },
     time_taken: {
-      type: Number, // in seconds
+      type: Number,
       required: true,
     },
     started_at: {
@@ -61,6 +59,10 @@ const quizAttemptSchema = new mongoose.Schema(
     completed_at: {
       type: Date,
       required: true,
+    },
+    forced_by_timer: {
+      type: Boolean,
+      default: false,
     },
     is_deleted: {
       type: Boolean,
@@ -76,7 +78,8 @@ const quizAttemptSchema = new mongoose.Schema(
   }
 );
 
-// Compound index for user's quiz attempts
+// Index for efficient queries
 quizAttemptSchema.index({ user_id: 1, quiz_id: 1, createdAt: -1 });
+quizAttemptSchema.index({ user_id: 1, is_deleted: 1 });
 
 module.exports = mongoose.model('QuizAttempt', quizAttemptSchema);
