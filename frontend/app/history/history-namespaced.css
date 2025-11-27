@@ -247,6 +247,8 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--spacing-6);
+  width: 100%;
+  overflow: hidden;
 }
 
 @media (min-width: 768px) {
@@ -270,6 +272,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .history-page .quiz-card:hover {
@@ -282,6 +286,8 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--spacing-3);
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .history-page .quiz-card-title {
@@ -290,6 +296,11 @@
   color: var(--color-gray-900);
   line-height: 1.4;
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .history-page .difficulty-badge {
@@ -645,5 +656,29 @@
   
   .history-page .empty-state {
     padding: var(--spacing-8);
+  }
+
+  .history-page .quiz-card-title {
+    font-size: 1rem;
+  }
+
+  .history-page .quiz-card-header {
+    gap: var(--spacing-2);
+  }
+
+  .history-page .difficulty-badge {
+    padding: var(--spacing-1) var(--spacing-2);
+    font-size: 0.65rem;
+  }
+  
+  .history-page .quiz-card-footer {
+    flex-direction: column;
+    gap: var(--spacing-3);
+    align-items: stretch;
+  }
+  
+  .history-page .btn-play-quiz {
+    width: 100%;
+    justify-content: center;
   }
 }
