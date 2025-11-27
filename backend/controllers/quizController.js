@@ -35,7 +35,7 @@ const extractTextFromPDF = async (filePath) => {
     return data.text;
     
   } catch (error) {
-    console.error('❌ PDF extraction failed:', error.message);
+    console.error('❌ PDF extraction failed:', error.message); 
     
     if (error.message.includes('Invalid PDF')) {
       throw new Error('Invalid or corrupted PDF file');
