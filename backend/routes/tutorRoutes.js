@@ -5,12 +5,7 @@ const router = express.Router();
 const tutorController = require('../controllers/tutorController');
 const authMiddleware = require('../middleware/auth'); 
 
-// Apply authentication to all tutor routes
 router.use(authMiddleware);
-
-// =============================
-// File Upload Routes
-// =============================
 
 /**
  * @route   POST /api/tutor/upload
@@ -25,10 +20,6 @@ router.post('/upload', tutorController.uploadFile);
  * @access  Private
  */
 router.get('/files', tutorController.getUserFiles);
-
-// =============================
-// Tutor Chat Routes
-// =============================
 
 /**
  * @route   POST /api/tutor/chat
