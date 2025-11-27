@@ -205,6 +205,7 @@
 }
 
 /* Recent Chats Sidebar */
+
 .tutor-page .recent-chats-sidebar {
   width: 280px;
   background-color: var(--color-white);
@@ -213,7 +214,17 @@
   border: 1px solid var(--color-gray-100);
   padding: var(--spacing-6);
   flex-shrink: 0;
-  overflow-y: auto;
+  /* Parent should clip corners; move scrolling to internal element */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Keep the recent chats sidebar from expanding the page.
+   It will scroll internally when there are many sessions. */
+.tutor-page .recent-chats-sidebar {
+  min-height: 0;
+  max-height: calc(100vh - 160px);
 }
 
 @media (max-width: 768px) {
@@ -234,6 +245,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
+}
+
+/* Make the sessions list scroll internally so the scrollbar stays inside the rounded box */
+.tutor-page .recent-chats-sidebar .sessions-list {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 6px; /* avoid content hiding under scrollbar */
 }
 
 .tutor-page .session-item {
@@ -299,6 +318,12 @@
   min-height: 0;
 }
 
+/* Keep the chat area constrained to the viewport so new messages
+   don't push the whole page down. Messages will scroll internally. */
+.tutor-page .chat-main {
+  max-height: calc(100vh - 160px);
+}
+
 /* Messages Container */
 .tutor-page .messages-container {
   flex: 1;
@@ -307,6 +332,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-6);
+}
+
+/* Ensure the messages container respects the parent's max-height
+   and can scroll internally on overflow. */
+.tutor-page .messages-container {
+  min-height: 0;
+  max-height: 100%;
 }
 
 @media (max-width: 640px) {
@@ -540,6 +572,22 @@
 .tutor-page .messages-container::-webkit-scrollbar-thumb:hover,
 .tutor-page .recent-chats-sidebar::-webkit-scrollbar-thumb:hover,
 .tutor-page .message-input::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gray-500);
+}
+
+/* Also style the scrollbar for the internal sessions-list so it matches and stays inside the rounded sidebar */
+.tutor-page .recent-chats-sidebar .sessions-list::-webkit-scrollbar {
+  width: 6px;
+}
+.tutor-page .recent-chats-sidebar .sessions-list::-webkit-scrollbar-track {
+  background: var(--color-gray-100);
+  border-radius: var(--radius-full);
+}
+.tutor-page .recent-chats-sidebar .sessions-list::-webkit-scrollbar-thumb {
+  background: var(--color-gray-300);
+  border-radius: var(--radius-full);
+}
+.tutor-page .recent-chats-sidebar .sessions-list::-webkit-scrollbar-thumb:hover {
   background: var(--color-gray-500);
 }
 
