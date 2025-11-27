@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CollapsibleSidebar from '@/app/sidebar';
 import { authService } from '@/services/auth.service';
@@ -57,11 +57,15 @@ const TakeQuizPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [answers, setAnswers] = useState<Map<string, string>>(new Map());
-  const [startTime] = useState<Date>(new Date());
+  const [startTime, setStartTime] = useState<Date>(new Date());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [showIncompleteWarning, setShowIncompleteWarning] = useState<boolean>(false);
+  const [progressLoaded, setProgressLoaded] = useState<boolean>(false);
+  
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Subscribe to auth changes
   useEffect(() => {
@@ -95,27 +99,47 @@ const TakeQuizPage: React.FC = () => {
     }
   }, [quizId, token]);
 
+  // Load saved progress when quiz loads - FIXED VERSION
   useEffect(() => {
-    if (quiz?.time_limit && timeRemaining === null) {
-      setTimeRemaining(quiz.time_limit * 60);
+    if (quiz && token && !progressLoaded) {
+      loadQuizProgress();
     }
-  }, [quiz, timeRemaining]);
+  }, [quiz, token, progressLoaded]);
 
+  // Timer countdown
   useEffect(() => {
-    if (timeRemaining !== null && timeRemaining > 0) {
-      const timer = setInterval(() => {
+    if (timeRemaining !== null && timeRemaining > 0 && !isSubmitting && progressLoaded) {
+      timerRef.current = setInterval(() => {
         setTimeRemaining((prev) => {
           if (prev === null || prev <= 1) {
-            handleSubmitQuiz(true); // Force submit when time runs out
+            if (timerRef.current) clearInterval(timerRef.current);
+            handleSubmitQuiz(true);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
 
-      return () => clearInterval(timer);
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    } else if (timeRemaining === 0 && !isSubmitting) {
+      handleSubmitQuiz(true);
     }
-  }, [timeRemaining]);
+  }, [timeRemaining, isSubmitting, progressLoaded]);
+
+  // Auto-save progress every 10 seconds
+  useEffect(() => {
+    if (quiz && !isSubmitting && progressLoaded) {
+      saveIntervalRef.current = setInterval(() => {
+        saveQuizProgress();
+      }, 10000);
+
+      return () => {
+        if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+      };
+    }
+  }, [quiz, currentQuestionIndex, answers, timeRemaining, isSubmitting, progressLoaded]);
 
   const fetchQuiz = async () => {
     if (!token) {
@@ -152,9 +176,111 @@ const TakeQuizPage: React.FC = () => {
     }
   };
 
+  const loadQuizProgress = async () => {
+    try {
+      console.log('🔄 Loading saved progress...');
+      const response = await fetch(`${API_BASE_URL}/quiz/${quizId}/progress`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.progress && !data.progress.is_completed) {
+          console.log('✅ Loaded saved progress:', data.progress);
+          
+          // Restore question index
+          setCurrentQuestionIndex(data.progress.current_question_index || 0);
+          
+          // Restore answers
+          const answersMap = new Map();
+          if (data.progress.answers) {
+            Object.entries(data.progress.answers).forEach(([key, value]) => {
+              answersMap.set(key, value as string);
+            });
+          }
+          setAnswers(answersMap);
+          console.log('✅ Restored', answersMap.size, 'answers');
+          
+          // Restore time remaining
+          if (data.progress.time_remaining !== null && data.progress.time_remaining !== undefined) {
+            setTimeRemaining(data.progress.time_remaining);
+            console.log('✅ Restored time remaining:', data.progress.time_remaining);
+          } else if (quiz?.time_limit) {
+            // If no saved time, initialize with quiz time limit
+            setTimeRemaining(quiz.time_limit * 60);
+            console.log('⏱️ Initialized time with quiz limit:', quiz.time_limit * 60);
+          }
+          
+          // Restore start time
+          if (data.progress.start_time) {
+            setStartTime(new Date(data.progress.start_time));
+            console.log('✅ Restored start time:', data.progress.start_time);
+          }
+        } else {
+          console.log('ℹ️ No saved progress found or quiz already completed');
+          // Initialize time for new attempt
+          if (quiz?.time_limit && timeRemaining === null) {
+            setTimeRemaining(quiz.time_limit * 60);
+            console.log('⏱️ Initialized time for new attempt:', quiz.time_limit * 60);
+          }
+        }
+      } else {
+        console.log('ℹ️ No saved progress available');
+        // Initialize time for new attempt
+        if (quiz?.time_limit && timeRemaining === null) {
+          setTimeRemaining(quiz.time_limit * 60);
+          console.log('⏱️ Initialized time for new attempt:', quiz.time_limit * 60);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Failed to load progress:', err);
+      // Initialize time even on error
+      if (quiz?.time_limit && timeRemaining === null) {
+        setTimeRemaining(quiz.time_limit * 60);
+      }
+    } finally {
+      setProgressLoaded(true);
+      console.log('✅ Progress loading complete');
+    }
+  };
+
+  const saveQuizProgress = async () => {
+    if (!token || !quiz || isSubmitting) return;
+
+    try {
+      const answersObj: Record<string, string> = {};
+      answers.forEach((value, key) => {
+        answersObj[key] = value;
+      });
+
+      await fetch(`${API_BASE_URL}/quiz/${quizId}/save-progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentQuestionIndex,
+          answers: answersObj,
+          startTime: startTime.toISOString(),
+          timeRemaining,
+        }),
+      });
+      
+      console.log('💾 Progress auto-saved');
+    } catch (err) {
+      console.error('❌ Failed to save progress:', err);
+    }
+  };
+
   const handleAnswerChange = (questionId: string, answer: string) => {
     setAnswers((prev) => new Map(prev).set(questionId, answer));
-    setShowIncompleteWarning(false); // Hide warning when user answers
+    setShowIncompleteWarning(false);
+    
+    // Save immediately when answer changes
+    setTimeout(() => saveQuizProgress(), 100);
   };
 
   const handleNextQuestion = () => {
@@ -188,14 +314,13 @@ const TakeQuizPage: React.FC = () => {
   };
 
   const handleSubmitQuiz = async (forceSubmit: boolean = false) => {
-    if (!quiz || !token) return;
+    if (!quiz || !token || isSubmitting) return;
 
-    // Check if all questions are answered (unless forced by timer)
+    // Only show warning if NOT forced by timer and questions are incomplete
     if (!forceSubmit && !areAllQuestionsAnswered()) {
       setShowIncompleteWarning(true);
       const unanswered = getUnansweredQuestions();
       if (unanswered.length > 0) {
-        // Navigate to first unanswered question
         setCurrentQuestionIndex(unanswered[0]);
       }
       return;
@@ -204,13 +329,29 @@ const TakeQuizPage: React.FC = () => {
     setIsSubmitting(true);
     setError('');
 
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+
     try {
       const completedAt = new Date();
-      const answerArray: Answer[] = quiz.questions.map((q) => ({
-        question_id: q._id,
-        user_answer: answers.get(q._id) || '',
-        time_spent: 0,
-      }));
+      
+      // Create answer array - ensure all questions have an entry
+      // For unanswered questions, use empty string as user_answer
+      const answerArray: Answer[] = quiz.questions.map((q) => {
+        const userAnswer = answers.get(q._id);
+        return {
+          question_id: q._id,
+          user_answer: userAnswer !== undefined && userAnswer !== null ? userAnswer.trim() : '',
+          time_spent: 0,
+        };
+      });
+
+      console.log('Submitting answers:', {
+        total: answerArray.length,
+        answered: answerArray.filter(a => a.user_answer !== '').length,
+        unanswered: answerArray.filter(a => a.user_answer === '').length,
+        forcedByTimer: forceSubmit
+      });
 
       const response = await fetch(`${API_BASE_URL}/quiz/${quizId}/submit`, {
         method: 'POST',
@@ -222,6 +363,7 @@ const TakeQuizPage: React.FC = () => {
           answers: answerArray,
           startedAt: startTime.toISOString(),
           completedAt: completedAt.toISOString(),
+          forcedByTimer: forceSubmit,
         }),
       });
 
@@ -232,15 +374,44 @@ const TakeQuizPage: React.FC = () => {
       }
 
       if (!response.ok) {
-        throw new Error('Failed to submit quiz');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Submit error:', errorData);
+        throw new Error(errorData.error || 'Failed to submit quiz');
       }
 
       const data = await response.json();
+      
+      await clearQuizProgress();
+      
       router.push(`/quiz/${quizId}/results?attemptId=${data.attempt._id}`);
     } catch (err) {
-      setError('Failed to submit quiz. Please try again.');
       console.error('Submit quiz error:', err);
+      setError('Failed to submit quiz. Please try again.');
       setIsSubmitting(false);
+    }
+  };
+
+  const clearQuizProgress = async () => {
+    if (!token) return;
+    
+    try {
+      await fetch(`${API_BASE_URL}/quiz/${quizId}/save-progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentQuestionIndex: 0,
+          answers: {},
+          startTime: new Date().toISOString(),
+          timeRemaining: null,
+          isCompleted: true,
+        }),
+      });
+      console.log('🗑️ Progress cleared');
+    } catch (err) {
+      console.error('Failed to clear progress:', err);
     }
   };
 
@@ -294,7 +465,6 @@ const TakeQuizPage: React.FC = () => {
   return (
     <CollapsibleSidebar>
       <div className="take-quiz-page">
-        {/* Header */}
         <div className="quiz-header-bar">
           <div className="quiz-info">
             <h1 className="quiz-title">{quiz.title}</h1>
@@ -318,7 +488,6 @@ const TakeQuizPage: React.FC = () => {
           )}
         </div>
 
-        {/* Progress Bar */}
         <div className="progress-container">
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${getProgress()}%` }} />
@@ -326,7 +495,6 @@ const TakeQuizPage: React.FC = () => {
           <span className="progress-text">{getProgress()}% Complete</span>
         </div>
 
-        {/* Incomplete Warning */}
         {showIncompleteWarning && (
           <div className="incomplete-warning" style={{
             backgroundColor: '#fef3c7',
@@ -348,18 +516,16 @@ const TakeQuizPage: React.FC = () => {
           </div>
         )}
 
-        {/* Question Card */}
         <div className="question-card">
           <div className="question-header">
             <span className="question-number">Question {currentQuestionIndex + 1}</span>
             <span className="question-type-badge">
-              {quiz.quiz_type === 'multiple-choice' ? 'Multiple Choice' : 'Fill in the Blank'}
+              {currentQuestion.question_type === 'multiple-choice' ? 'Multiple Choice' : 'Fill in the Blank'}
             </span>
           </div>
 
           <p className="question-text">{currentQuestion.question_text}</p>
 
-          {/* Answer Options */}
           <div className="answer-section">
             {currentQuestion.question_type === 'multiple-choice' ? (
               <div className="options-grid">
@@ -391,7 +557,6 @@ const TakeQuizPage: React.FC = () => {
             )}
           </div>
 
-          {/* Navigation */}
           <div className="question-navigation">
             <button
               className="nav-button"
@@ -434,7 +599,6 @@ const TakeQuizPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Question Grid */}
         <div className="question-grid-card">
           <h3 className="grid-title">
             Questions Overview 
