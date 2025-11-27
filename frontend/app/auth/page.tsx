@@ -257,7 +257,7 @@ export default function AuthPage() {
                 </h2>
                 <p className="auth-subtitle">
                   {formMode === 'login' 
-                    ? 'Your journey to mental wellness starts here'
+                    ? 'Discover a smarter way to learn today'
                     : 'Sign up to get started with your account'
                   }
                 </p>
