@@ -716,7 +716,25 @@ exports.submitQuizAttempt = async (req, res) => {
   try {
     const userId = req.user.id;
     const { quizId } = req.params;
-    const { answers, startedAt, completedAt } = req.body;
+    const { answers, startedAt, completedAt, forcedByTimer } = req.body;
+
+    console.log('==================== SUBMIT QUIZ ATTEMPT ====================');
+    console.log('User ID:', userId);
+    console.log('Quiz ID:', quizId);
+    console.log('Answers received:', answers ? answers.length : 0);
+    console.log('Forced by timer:', forcedByTimer);
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+    // Validate input
+    if (!answers || !Array.isArray(answers)) {
+      console.log('❌ Invalid answers format');
+      return res.status(400).json({ error: 'Invalid answers format' });
+    }
+
+    if (!startedAt || !completedAt) {
+      console.log('❌ Missing timestamps');
+      return res.status(400).json({ error: 'Missing start or completion time' });
+    }
 
     const quiz = await Quiz.findOne({
       _id: quizId,
@@ -726,45 +744,173 @@ exports.submitQuizAttempt = async (req, res) => {
     });
 
     if (!quiz) {
+      console.log('❌ Quiz not found');
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
-    let correctCount = 0;
-    const processedAnswers = answers.map((answer) => {
-      const question = quiz.questions.id(answer.question_id);
-      const isCorrect = question.correct_answer === answer.user_answer;
-      if (isCorrect) correctCount++;
+    console.log('✓ Quiz found');
+    console.log('Quiz questions count:', quiz.questions ? quiz.questions.length : 0);
 
-      return {
-        question_id: answer.question_id,
-        user_answer: answer.user_answer,
-        is_correct: isCorrect,
-        time_spent: answer.time_spent || 0,
-      };
+    if (!quiz.questions || quiz.questions.length === 0) {
+      console.log('❌ Quiz has no questions');
+      return res.status(400).json({ error: 'Quiz has no questions' });
+    }
+
+    let correctCount = 0;
+    let answeredCount = 0;
+    
+    const processedAnswers = answers.map((answer, index) => {
+      try {
+        console.log(`\nProcessing answer ${index + 1}:`, {
+          question_id: answer.question_id,
+          user_answer: answer.user_answer,
+          user_answer_length: answer.user_answer ? answer.user_answer.length : 0
+        });
+
+        // Find question by ID
+        let question = null;
+        
+        // Try different methods to find the question
+        if (quiz.questions.id) {
+          // Mongoose subdocument method
+          try {
+            question = quiz.questions.id(answer.question_id);
+          } catch (e) {
+            console.log('Could not use .id() method, trying .find()');
+          }
+        }
+        
+        if (!question) {
+          // Array find method
+          question = quiz.questions.find(q => {
+            const qId = q._id ? q._id.toString() : q.toString();
+            const aId = answer.question_id ? answer.question_id.toString() : answer.question_id;
+            return qId === aId;
+          });
+        }
+
+        if (!question) {
+          console.warn(`⚠️ Question ${answer.question_id} not found in quiz`);
+          return {
+            question_id: answer.question_id,
+            user_answer: answer.user_answer || '',
+            is_correct: false,
+            time_spent: answer.time_spent || 0,
+          };
+        }
+
+        console.log('✓ Question found:', {
+          question_text: question.question_text ? question.question_text.substring(0, 50) : 'N/A',
+          correct_answer: question.correct_answer
+        });
+
+        // Check if question was answered
+        const userAnswer = answer.user_answer || '';
+        const wasAnswered = userAnswer.trim() !== '';
+        
+        if (wasAnswered) {
+          answeredCount++;
+        }
+
+        // Check if answer is correct (case-insensitive comparison, trimmed)
+        const userAnswerNormalized = userAnswer.trim().toLowerCase();
+        const correctAnswerNormalized = (question.correct_answer || '').trim().toLowerCase();
+        const isCorrect = wasAnswered && userAnswerNormalized === correctAnswerNormalized;
+        
+        if (isCorrect) {
+          correctCount++;
+        }
+
+        console.log(`Result: ${wasAnswered ? 'answered' : 'skipped'} - ${isCorrect ? '✓ correct' : '✗ incorrect'}`);
+
+        return {
+          question_id: answer.question_id,
+          user_answer: userAnswer,
+          is_correct: isCorrect,
+          time_spent: answer.time_spent || 0,
+        };
+      } catch (answerError) {
+        console.error(`❌ Error processing answer ${index + 1}:`, answerError.message);
+        // Return safe default
+        return {
+          question_id: answer.question_id,
+          user_answer: answer.user_answer || '',
+          is_correct: false,
+          time_spent: answer.time_spent || 0,
+        };
+      }
     });
 
-    const score = Math.round((correctCount / quiz.questions.length) * 100);
-    const timeTaken = Math.floor((new Date(completedAt) - new Date(startedAt)) / 1000);
+    // Calculate score
+    const totalQuestions = quiz.questions.length;
+    const score = totalQuestions > 0 
+      ? Math.round((correctCount / totalQuestions) * 100) 
+      : 0;
 
-    const attempt = await QuizAttempt.create({
+    // Calculate time taken
+    const timeTaken = Math.floor(
+      (new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000
+    );
+
+    console.log('\nQuiz Results Summary:');
+    console.log('- Total questions:', totalQuestions);
+    console.log('- Answered:', answeredCount);
+    console.log('- Correct:', correctCount);
+    console.log('- Score:', score + '%');
+    console.log('- Time taken:', timeTaken, 'seconds');
+    console.log('- Forced by timer:', forcedByTimer);
+
+    const attemptData = {
       quiz_id: quizId,
       user_id: userId,
       answers: processedAnswers,
       score: score,
-      total_questions: quiz.questions.length,
+      total_questions: totalQuestions,
       correct_answers: correctCount,
       time_taken: timeTaken,
-      started_at: startedAt,
-      completed_at: completedAt,
+      started_at: new Date(startedAt),
+      completed_at: new Date(completedAt),
+      forced_by_timer: forcedByTimer || false,
+    };
+
+    console.log('\nCreating attempt with data:', {
+      ...attemptData,
+      answers: `[${attemptData.answers.length} answers]`
     });
+
+    const attempt = await QuizAttempt.create(attemptData);
+
+    console.log('✓ Attempt saved successfully, ID:', attempt._id);
+    console.log('==================== SUBMIT COMPLETE ====================\n');
 
     res.status(201).json({
       message: 'Quiz submitted successfully',
       attempt: attempt,
+      summary: {
+        total: totalQuestions,
+        answered: answeredCount,
+        correct: correctCount,
+        score: score,
+        forcedByTimer: forcedByTimer || false,
+      }
     });
   } catch (error) {
-    console.error('Submit Quiz Error:', error);
-    res.status(500).json({ error: 'Failed to submit quiz' });
+    console.error('\n❌❌❌ SUBMIT QUIZ ERROR ❌❌❌');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    if (error.name === 'ValidationError') {
+      console.error('Validation errors:', error.errors);
+    }
+    
+    console.error('==========================================\n');
+    
+    res.status(500).json({ 
+      error: 'Failed to submit quiz',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      errorType: error.name
+    });
   }
 };
 
@@ -1015,5 +1161,92 @@ exports.deleteFile = async (req, res) => {
     console.error('==========================================\n');
     
     res.status(500).json({ error: 'Failed to delete file' });
+  }
+};
+
+// Save quiz progress
+exports.saveQuizProgress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { quizId } = req.params;
+    const { currentQuestionIndex, answers, startTime, timeRemaining } = req.body;
+
+    console.log('==================== SAVE QUIZ PROGRESS ====================');
+    console.log('User ID:', userId);
+    console.log('Quiz ID:', quizId);
+    console.log('Progress:', { currentQuestionIndex, answersCount: Object.keys(answers).length, timeRemaining });
+
+    // Store in a QuizProgress model (you'll need to create this)
+    // For now, using a simple collection
+    const QuizProgress = require('../models/QuizProgress'); // You'll need to create this model
+    
+    const progress = await QuizProgress.findOneAndUpdate(
+      {
+        quiz_id: quizId,
+        user_id: userId,
+        is_completed: false,
+      },
+      {
+        current_question_index: currentQuestionIndex,
+        answers: answers,
+        start_time: startTime,
+        time_remaining: timeRemaining,
+        last_updated: new Date(),
+      },
+      {
+        upsert: true,
+        new: true,
+      }
+    );
+
+    console.log('✓ Progress saved');
+    console.log('==================== SAVE COMPLETE ====================\n');
+
+    res.status(200).json({
+      success: true,
+      message: 'Progress saved',
+    });
+
+  } catch (error) {
+    console.error('❌ SAVE PROGRESS ERROR:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save progress',
+    });
+  }
+};
+
+// Get quiz progress
+exports.getQuizProgress = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { quizId } = req.params;
+
+    console.log('==================== GET QUIZ PROGRESS ====================');
+    console.log('User ID:', userId);
+    console.log('Quiz ID:', quizId);
+
+    const QuizProgress = require('../models/QuizProgress');
+    
+    const progress = await QuizProgress.findOne({
+      quiz_id: quizId,
+      user_id: userId,
+      is_completed: false,
+    });
+
+    console.log('✓ Progress retrieved:', progress ? 'Found' : 'Not found');
+    console.log('==================== GET COMPLETE ====================\n');
+
+    res.status(200).json({
+      success: true,
+      progress: progress || null,
+    });
+
+  } catch (error) {
+    console.error('❌ GET PROGRESS ERROR:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get progress',
+    });
   }
 };
