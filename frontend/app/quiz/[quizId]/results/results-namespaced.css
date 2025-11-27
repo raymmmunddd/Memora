@@ -120,6 +120,8 @@
   gap: var(--spacing-8);
   align-items: center;
   flex-wrap: wrap;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .results-page .score-circle {
@@ -174,7 +176,9 @@
 
 .results-page .score-details {
   flex: 1;
-  min-width: 300px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .results-page .score-message {
@@ -182,12 +186,16 @@
   font-weight: 700;
   color: var(--color-gray-900);
   margin-bottom: var(--spacing-6);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .results-page .stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-4);
+  width: 100%;
+  overflow: hidden;
 }
 
 .results-page .stat-item {
@@ -197,6 +205,9 @@
   padding: var(--spacing-4);
   background-color: var(--color-gray-50);
   border-radius: var(--radius-xl);
+  overflow: hidden;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .results-page .stat-icon {
@@ -223,6 +234,8 @@
 
 .results-page .stat-content {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .results-page .stat-value {
@@ -230,12 +243,18 @@
   font-weight: 700;
   color: var(--color-gray-900);
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .results-page .stat-label {
   font-size: 0.875rem;
   color: var(--color-gray-600);
   margin-top: var(--spacing-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Action Buttons */
@@ -523,6 +542,7 @@
   .results-page .score-card {
     flex-direction: column;
     padding: var(--spacing-6);
+    gap: var(--spacing-6);
   }
 
   .results-page .score-circle {
@@ -538,9 +558,31 @@
     font-size: 1.5rem;
     text-align: center;
   }
+  
+  .results-page .score-details {
+    width: 100%;
+  }
 
   .results-page .stats-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .results-page .stat-item {
+    padding: var(--spacing-3);
+    gap: var(--spacing-2);
+  }
+  
+  .results-page .stat-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  
+  .results-page .stat-value {
+    font-size: 1.25rem;
+  }
+  
+  .results-page .stat-label {
+    font-size: 0.75rem;
   }
 
   .results-page .action-buttons {
@@ -561,5 +603,25 @@
 
   .results-page .answer-label {
     min-width: 100px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .results-page .score-card {
+    padding: var(--spacing-4);
+  }
+  
+  .results-page .score-circle {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .results-page .score-value {
+    font-size: 2rem;
+  }
+  
+  .results-page .score-message {
+    font-size: 1.25rem;
   }
 }
