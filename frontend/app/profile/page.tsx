@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Mail
 } from 'lucide-react';
-import './profile-namespaced.css';
+import './profile.css';
 
 interface UserData {
   _id: string;
