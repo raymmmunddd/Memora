@@ -112,7 +112,7 @@ const AITutorPage: React.FC = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tutor/sessions/recent`, {
+      const response = await fetch('/api/tutor/sessions/recent', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -129,7 +129,7 @@ const AITutorPage: React.FC = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tutor/files`, {
+      const response = await fetch('/api/tutor/files', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -181,7 +181,7 @@ const AITutorPage: React.FC = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_BASE_URL}/tutor/upload`, {
+        const response = await fetch('/api/tutor/upload', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -246,7 +246,7 @@ const AITutorPage: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/tutor/chat`, {
+      const response = await fetch('/api/tutor/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -386,7 +386,6 @@ const AITutorPage: React.FC = () => {
           <div className="header-content">
             <div className="header-text">
               <div className="title-wrapper">
-                <Sparkles className="title-icon" />
                 <h1 className="page-title">AI Tutor</h1>
               </div>
               <p className="page-subtitle">
