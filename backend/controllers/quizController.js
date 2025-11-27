@@ -624,10 +624,47 @@ exports.getUserQuizzes = async (req, res) => {
       is_deleted: false,
       status: 'completed',
     })
-      .sort({ createdAt: -1 })
-      .select('-questions');
+      .sort({ createdAt: -1 });
 
-    res.status(200).json({ quizzes });
+    console.log('Found quizzes:', quizzes.length);
+
+    // Get question counts from the most recent attempt for each quiz
+    const quizIds = quizzes.map(q => q._id);
+    const attempts = await QuizAttempt.find({
+      quiz_id: { $in: quizIds },
+      user_id: userId,
+      is_deleted: false
+    })
+      .select('quiz_id total_questions')
+      .sort({ createdAt: -1 });
+
+    // Create a map of quiz_id -> total_questions
+    const questionCountMap = {};
+    attempts.forEach(attempt => {
+      const quizId = attempt.quiz_id.toString();
+      if (!questionCountMap[quizId]) {
+        questionCountMap[quizId] = attempt.total_questions;
+      }
+    });
+
+    // Format response with question count
+    const quizzesWithCount = quizzes.map(quiz => {
+      const quizId = quiz._id.toString();
+      const questionCount = questionCountMap[quizId] || quiz.questions?.length || 0;
+      
+      return {
+        _id: quiz._id,
+        title: quiz.title,
+        difficulty: quiz.difficulty,
+        quiz_type: quiz.quiz_type,
+        time_limit: quiz.time_limit,
+        created_at: quiz.createdAt,
+        question_count: questionCount,
+        status: quiz.status
+      };
+    });
+
+    res.status(200).json({ quizzes: quizzesWithCount });
   } catch (error) {
     console.error('Get User Quizzes Error:', error);
     res.status(500).json({ error: 'Failed to fetch quizzes' });
