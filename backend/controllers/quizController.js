@@ -536,10 +536,26 @@ exports.generateQuiz = async (req, res) => {
 
     console.log('Total extracted text length:', extractedTexts.join('').length);
 
+    // Generate quiz title from file names
+    let quizTitle;
+    if (files.length === 1) {
+      // Single file: use the file name without extension
+      const fileName = files[0].original_name;
+      const nameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+      quizTitle = nameWithoutExt;
+    } else {
+      // Multiple files: combine first file name with count
+      const firstName = files[0].original_name;
+      const nameWithoutExt = firstName.substring(0, firstName.lastIndexOf('.')) || firstName;
+      quizTitle = `${nameWithoutExt} +${files.length - 1} more`;
+    }
+
+    console.log('Generated quiz title:', quizTitle);
+
     const quiz = await Quiz.create({
       user_id: userId,
-      title: `Quiz - ${new Date().toLocaleDateString()}`,
-      quiz_type: Array.isArray(quizTypes) ? quizTypes : [quizTypes], // Ensure it's always an array
+      title: quizTitle, // Use generated title instead of date
+      quiz_type: Array.isArray(quizTypes) ? quizTypes : [quizTypes],
       difficulty: difficulty,
       time_limit: timeLimit === 'none' ? null : parseInt(timeLimit),
       source_files: files.map((f) => ({
@@ -551,9 +567,10 @@ exports.generateQuiz = async (req, res) => {
     });
 
     console.log('✓ Quiz record created, ID:', quiz._id);
+    console.log('✓ Quiz title:', quiz.title);
 
     const settings = {
-      quiz_types: Array.isArray(quizTypes) ? quizTypes : [quizTypes], // Ensure array
+      quiz_types: Array.isArray(quizTypes) ? quizTypes : [quizTypes],
       numQuestions: numQuestions,
       difficulty: difficulty,
     };
@@ -579,6 +596,7 @@ exports.generateQuiz = async (req, res) => {
       message: 'Quiz generation started',
       quizId: quiz._id,
       status: 'generating',
+      title: quizTitle, // Include title in response
     });
   } catch (error) {
     console.error('❌❌❌ GENERATE QUIZ ERROR ❌❌❌');
