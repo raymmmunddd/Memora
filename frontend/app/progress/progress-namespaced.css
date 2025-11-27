@@ -295,6 +295,8 @@
   padding: 2rem;
   margin-bottom: 2rem;
   box-shadow: var(--shadow-md);
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .progress-page .section-header {
@@ -318,6 +320,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 1.5rem;
+  width: 100%;
+  overflow: hidden;
 }
 
 .progress-page .insight-card {
@@ -325,6 +329,8 @@
   padding: 1.5rem;
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-gray-200);
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .progress-page .insight-card-full {
@@ -342,6 +348,8 @@
   color: var(--color-gray-700);
   line-height: 1.6;
   font-size: 0.9375rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .progress-page .insight-list {
@@ -360,6 +368,9 @@
   color: var(--color-gray-700);
   line-height: 1.5;
   font-size: 0.9375rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .progress-page .insight-bullet {
@@ -431,6 +442,8 @@
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-gray-200);
   transition: all var(--transition-base);
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .progress-page .attempt-card:hover {
@@ -444,6 +457,8 @@
   justify-content: space-between;
   margin-bottom: 1rem;
   gap: 1rem;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .progress-page .attempt-title {
@@ -451,11 +466,18 @@
   font-weight: 600;
   color: var(--color-gray-900);
   margin-bottom: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-word;
 }
 
 .progress-page .attempt-subject {
   font-size: 0.875rem;
   color: var(--color-gray-600);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .progress-page .attempt-score-badge {
@@ -544,6 +566,26 @@
   .progress-page .attempt-score-badge {
     align-self: flex-start;
   }
+  
+  .progress-page .attempt-title {
+    font-size: 0.9375rem;
+  }
+  
+  .progress-page .ai-insights-section {
+    padding: 1.5rem;
+  }
+  
+  .progress-page .insight-card {
+    padding: 1.25rem;
+  }
+  
+  .progress-page .section-title {
+    font-size: 1.25rem;
+  }
+  
+  .progress-page .insight-title {
+    font-size: 1rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -563,5 +605,22 @@
   .progress-page .attempt-details {
     flex-direction: column;
     gap: 0.75rem;
+  }
+  
+  .progress-page .attempt-card {
+    padding: 1rem;
+  }
+  
+  .progress-page .ai-insights-section {
+    padding: 1rem;
+  }
+  
+  .progress-page .insight-card {
+    padding: 1rem;
+  }
+  
+  .progress-page .insight-text,
+  .progress-page .insight-item {
+    font-size: 0.875rem;
   }
 }
