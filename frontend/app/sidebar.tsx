@@ -160,7 +160,6 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
         .mobile-menu-button {
           position: fixed;
           top: 1rem;
-          left: 1rem;
           z-index: 1001;
           background-color: rgba(31, 31, 31, 0.8);
           backdrop-filter: blur(8px);
@@ -172,7 +171,15 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
           display: none;
           align-items: center;
           justify-content: center;
-          transition: all 200ms ease;
+          transition: all 300ms ease;
+        }
+
+        .mobile-menu-button.menu-right {
+          right: 1rem;
+        }
+
+        .mobile-menu-button.menu-sidebar {
+          left: calc(280px - 4rem);
         }
 
         .mobile-menu-button:hover {
@@ -490,7 +497,7 @@ export default function CollapsibleSidebar({ children }: SidebarProps) {
       {/* Mobile menu button */}
       {isMobile && (
         <button 
-          className="mobile-menu-button"
+          className={`mobile-menu-button ${!isCollapsed ? 'menu-sidebar' : 'menu-right'}`}
           onClick={toggleSidebar}
           aria-label="Toggle menu"
         >
