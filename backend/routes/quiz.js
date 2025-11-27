@@ -81,4 +81,10 @@ router.get('/:quizId', quizController.getQuiz);
 // Delete file route 
 router.delete('/files/:fileId', quizController.deleteFile);
 
+// Save quiz progress
+router.post('/:quizId/save-progress', quizController.saveQuizProgress);
+
+// Get quiz progress
+router.get('/:quizId/progress', quizController.getQuizProgress);
+
 module.exports = router;
